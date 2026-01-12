@@ -1,7 +1,19 @@
-export type RunnerState = "idle" | "running" | "stopped";
+import type { BotStatus } from "@mm/core";
 
-export function nextState(current: RunnerState): RunnerState {
-  if (current === "idle") return "running";
-  if (current === "running") return "stopped";
-  return "stopped";
+export class BotStateMachine {
+  private status: BotStatus = "STOPPED";
+  private lastReason = "";
+
+  getStatus(): BotStatus {
+    return this.status;
+  }
+
+  getReason(): string {
+    return this.lastReason;
+  }
+
+  set(status: BotStatus, reason = ""): void {
+    this.status = status;
+    this.lastReason = reason;
+  }
 }

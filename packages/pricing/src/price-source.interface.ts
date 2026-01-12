@@ -1,3 +1,5 @@
+import type { MidPrice } from "@mm/core";
+
 export interface PriceSource {
-  getPrice(symbol: string): Promise<number>;
+  getMid(symbol: string): Promise<MidPrice>;
 }

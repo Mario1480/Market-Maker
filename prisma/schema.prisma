@@ -8,24 +8,31 @@ datasource db {
 }
 
 model Bot {
-  id        String   @id @default(uuid())
+  id        String   @id
   name      String
   symbol    String
   exchange  String
-  status    String
+  status    String   // STOPPED | RUNNING | PAUSED | ERROR
   createdAt DateTime @default(now())
+
+  mmConfig     MarketMakingConfig?
+  volConfig    VolumeConfig?
+  riskConfig   RiskConfig?
+  runtime      BotRuntime?
 }
 
 model MarketMakingConfig {
   id              String @id @default(uuid())
   botId           String @unique
+  bot             Bot    @relation(fields: [botId], references: [id])
   spreadPct       Float
   stepPct         Float
   levelsUp        Int
   levelsDown      Int
   budgetQuoteUsdt Float
   budgetBaseToken Float
-  distribution    String
+  distribution    String // LINEAR | VALLEY | RANDOM
+  jitterPct       Float  // e.g. 0.0002 = 2bp
   skewFactor      Float
   maxSkew         Float
 }
@@ -33,19 +40,40 @@ model MarketMakingConfig {
 model VolumeConfig {
   id                String @id @default(uuid())
   botId             String @unique
+  bot               Bot    @relation(fields: [botId], references: [id])
   dailyNotionalUsdt Float
   minTradeUsdt      Float
   maxTradeUsdt      Float
-  activeFrom        String
-  activeTo          String
-  mode              String
+  activeFrom        String // "08:00"
+  activeTo          String // "22:00"
+  mode              String // PASSIVE | MIXED
 }
 
 model RiskConfig {
-  id              String @id @default(uuid())
-  botId           String @unique
-  minUsdt         Float
-  maxDeviationPct Float
-  maxOpenOrders   Int
-  maxDailyLoss    Float
+  id                String @id @default(uuid())
+  botId             String @unique
+  bot               Bot    @relation(fields: [botId], references: [id])
+  minUsdt           Float
+  maxDeviationPct   Float
+  maxOpenOrders     Int
+  maxDailyLoss      Float
+}
+
+model BotRuntime {
+  botId       String  @id
+  bot         Bot     @relation(fields: [botId], references: [id])
+
+  updatedAt   DateTime @updatedAt
+  status      String
+  reason      String?
+
+  mid         Float?
+  bid         Float?
+  ask         Float?
+  openOrders  Int?
+
+  freeUsdt    Float?
+  freeBase    Float?
+
+  tradedNotionalToday Float? // volume bot
 }

@@ -1,11 +1,23 @@
 {
   "name": "market-maker",
   "private": true,
-  "version": "0.1.0",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "echo "dev not configured"",
-    "build": "echo "build not configured"",
-    "lint": "echo "lint not configured""
+    "dev:runner": "npm -w apps/runner run dev",
+    "build": "npm -ws run build",
+    "typecheck": "npm -ws run typecheck",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:migrate": "npx prisma migrate dev",
+    "db:generate": "npx prisma generate",
+    "dev:api": "npm -w apps/api run dev",
+    "dev:web": "npm -w apps/web run dev"
+  },
+  "devDependencies": {
+    "prisma": "^6.0.0",
+    "typescript": "^5.6.3"
   }
 }

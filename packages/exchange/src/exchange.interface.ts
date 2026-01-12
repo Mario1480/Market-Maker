@@ -1,9 +1,16 @@
-export type ExchangeOrder = {
-  id: string;
-  price: number;
-  size: number;
-};
+import type { Balance, MidPrice, Order, Quote } from "@mm/core";
 
-export interface ExchangeClient {
-  placeOrder(order: ExchangeOrder): Promise<string>;
+export interface ExchangePublic {
+  getMidPrice(symbol: string): Promise<MidPrice>;
+  // Optional: WS streaming can be added later; runner can poll.
 }
+
+export interface ExchangePrivate {
+  getBalances(): Promise<Balance[]>;
+  getOpenOrders(symbol: string): Promise<Order[]>;
+  placeOrder(q: Quote): Promise<Order>;
+  cancelOrder(symbol: string, orderId: string): Promise<void>;
+  cancelAll(symbol?: string, side?: "buy" | "sell"): Promise<void>;
+}
+
+export interface Exchange extends ExchangePublic, ExchangePrivate {}
