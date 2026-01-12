@@ -1,0 +1,14 @@
+version: "3.9"
+services:
+  api:
+    image: node:18-alpine
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: ["sh", "-c", "echo api placeholder && sleep infinity"]
+  web:
+    image: node:18-alpine
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: ["sh", "-c", "echo web placeholder && sleep infinity"]

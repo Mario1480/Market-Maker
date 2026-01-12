@@ -1,0 +1,11 @@
+{
+  "name": "market-maker",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "echo "dev not configured"",
+    "build": "echo "build not configured"",
+    "lint": "echo "lint not configured""
+  }
+}

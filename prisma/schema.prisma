@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Bot {
+  id        String   @id @default(uuid())
+  name      String
+  symbol    String
+  exchange  String
+  status    String
+  createdAt DateTime @default(now())
+}
+
+model MarketMakingConfig {
+  id              String @id @default(uuid())
+  botId           String @unique
+  spreadPct       Float
+  stepPct         Float
+  levelsUp        Int
+  levelsDown      Int
+  budgetQuoteUsdt Float
+  budgetBaseToken Float
+  distribution    String
+  skewFactor      Float
+  maxSkew         Float
+}
+
+model VolumeConfig {
+  id                String @id @default(uuid())
+  botId             String @unique
+  dailyNotionalUsdt Float
+  minTradeUsdt      Float
+  maxTradeUsdt      Float
+  activeFrom        String
+  activeTo          String
+  mode              String
+}
+
+model RiskConfig {
+  id              String @id @default(uuid())
+  botId           String @unique
+  minUsdt         Float
+  maxDeviationPct Float
+  maxOpenOrders   Int
+  maxDailyLoss    Float
+}
