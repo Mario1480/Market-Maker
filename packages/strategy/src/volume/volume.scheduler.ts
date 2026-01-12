@@ -1,10 +1,20 @@
 import type { Quote, VolumeConfig } from "@mm/core";
-import { hhmmNow, isWithinWindow, randBetween } from "@mm/core";
+import { clamp, hhmmNow, isWithinWindow, randBetween } from "@mm/core";
 
 export interface VolumeState {
   dayKey: string;          // YYYY-MM-DD
   tradedNotional: number;  // USDT
   lastActionMs: number;
+  pendingClientOrderId?: string;
+}
+
+function passivePrice(mid: number, side: "buy" | "sell"): number {
+  // place slightly away from mid so it's maker more often
+  const baseBps = randBetween(3, 12); // 0.03% .. 0.12%
+  const jitterBps = randBetween(-2, 2);
+  const bps = baseBps + jitterBps;
+  const mul = 1 + (side === "buy" ? -bps : bps) / 10_000;
+  return mid * mul;
 }
 
 export class VolumeScheduler {
@@ -28,26 +38,59 @@ export class VolumeScheduler {
     const remaining = this.cfg.dailyNotionalUsdt - state.tradedNotional;
     if (remaining <= 0) return null;
 
+    // avoid spamming while a previous volume order is likely still open
+    if (state.pendingClientOrderId) {
+      const m = state.pendingClientOrderId.match(/vol-(\d+)/);
+      if (m) {
+        const ts = Number(m[1]);
+        if (Number.isFinite(ts) && now - ts < 60_000) return null;
+      }
+    }
+
     // probabilistic pacing: don’t fire every tick
     const cooldown = 2_000; // minimum spacing between attempts
     if (now - state.lastActionMs < cooldown) return null;
 
-    const p = 0.12; // baseline chance per attempt (tune later)
+    // Scale probability lightly with remaining so we don't underfill the daily target.
+    const fillPressure = clamp(remaining / Math.max(1, this.cfg.dailyNotionalUsdt), 0, 1);
+    const p = 0.06 + 0.18 * fillPressure; // 6%..24%
     if (Math.random() > p) return null;
 
     const notional = Math.min(remaining, randBetween(this.cfg.minTradeUsdt, this.cfg.maxTradeUsdt));
     const side = Math.random() < 0.5 ? "buy" : "sell";
 
+    const clientOrderId = `vol-${now}`;
+
+    // PASSIVE-first: post-only limit close to mid
+    const price = passivePrice(mid, side);
+    const qty = notional / price;
+
+    // Optional small taker fallback in MIXED mode (rare)
+    const takerChance = this.cfg.mode === "MIXED" ? 0.10 : 0;
+    const useMarket = takerChance > 0 && Math.random() < takerChance;
+
     state.lastActionMs = now;
     state.tradedNotional += notional;
+    state.pendingClientOrderId = clientOrderId;
 
-    // MVP: place small MARKET order (simple), later prefer passive fills.
+    if (useMarket) {
+      return {
+        symbol,
+        side,
+        type: "market",
+        qty: notional / mid,
+        clientOrderId
+      };
+    }
+
     return {
       symbol,
       side,
-      type: "market",
-      qty: notional / mid,
-      clientOrderId: `vol-${now}`
+      type: "limit",
+      price,
+      qty,
+      postOnly: true,
+      clientOrderId
     };
   }
 }

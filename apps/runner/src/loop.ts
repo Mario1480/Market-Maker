@@ -43,7 +43,15 @@ export async function runLoop(params: {
   let lastReload = 0;
 
   sm.set("RUNNING");
-  await writeRuntime({ botId, status: "RUNNING", reason: null });
+  await writeRuntime({
+    botId,
+    status: "RUNNING",
+    reason: null,
+    openOrders: 0,
+    openOrdersMm: 0,
+    openOrdersVol: 0,
+    lastVolClientOrderId: null
+  });
 
   while (true) {
     // Bot status from DB (start/stop/pause)
@@ -51,25 +59,57 @@ export async function runLoop(params: {
     if (botRow.status === "STOPPED") {
       await exchange.cancelAll(symbol);
       sm.set("STOPPED", "Stopped from UI/API");
-      await writeRuntime({ botId, status: "STOPPED", reason: sm.getReason() });
+      await writeRuntime({
+        botId,
+        status: "STOPPED",
+        reason: sm.getReason(),
+        openOrders: 0,
+        openOrdersMm: 0,
+        openOrdersVol: 0,
+        lastVolClientOrderId: null
+      });
       break;
     }
     if (botRow.status === "PAUSED") {
       await exchange.cancelAll(symbol);
       sm.set("PAUSED", "Paused from UI/API");
-      await writeRuntime({ botId, status: "PAUSED", reason: sm.getReason() });
+      await writeRuntime({
+        botId,
+        status: "PAUSED",
+        reason: sm.getReason(),
+        openOrders: 0,
+        openOrdersMm: 0,
+        openOrdersVol: 0,
+        lastVolClientOrderId: null
+      });
       // wait until RUNNING
       while (true) {
         await new Promise((r) => setTimeout(r, 1500));
         const b = (await loadBotAndConfigs(botId)).bot;
         if (b.status === "RUNNING") {
           sm.set("RUNNING", "");
-          await writeRuntime({ botId, status: "RUNNING", reason: null });
+          await writeRuntime({
+            botId,
+            status: "RUNNING",
+            reason: null,
+            openOrders: 0,
+            openOrdersMm: 0,
+            openOrdersVol: 0,
+            lastVolClientOrderId: null
+          });
           break;
         }
         if (b.status === "STOPPED") {
           sm.set("STOPPED", "Stopped while paused");
-          await writeRuntime({ botId, status: "STOPPED", reason: sm.getReason() });
+          await writeRuntime({
+            botId,
+            status: "STOPPED",
+            reason: sm.getReason(),
+            openOrders: 0,
+            openOrdersMm: 0,
+            openOrdersVol: 0,
+            lastVolClientOrderId: null
+          });
           return;
         }
       }
@@ -93,6 +133,54 @@ export async function runLoop(params: {
       const mid = await priceSource.getMid(symbol);
       const balances = await exchange.getBalances();
       const open = await exchange.getOpenOrders(symbol);
+      const openMm = open.filter((o) => (o.clientOrderId ?? "").startsWith("mm-"));
+      const openOther = open.filter((o) => !(o.clientOrderId ?? "").startsWith("mm-"));
+      log.debug({ openTotal: open.length, openMm: openMm.length, openOther: openOther.length }, "open orders split");
+
+      const openVol = openOther.filter((o) => (o.clientOrderId ?? "").startsWith("vol-"));
+
+      let lastVolClientOrderId: string | null = null;
+      let lastVolTs = -1;
+      for (const o of openVol) {
+        const cid = o.clientOrderId ?? "";
+        const m = cid.match(/^vol-(\d+)/);
+        if (!m) continue;
+        const ts = Number(m[1]);
+        if (!Number.isFinite(ts)) continue;
+        if (ts > lastVolTs) {
+          lastVolTs = ts;
+          lastVolClientOrderId = cid;
+        }
+      }
+
+      log.debug(
+        { openTotal: open.length, openMm: openMm.length, openVol: openVol.length, lastVolClientOrderId },
+        "open orders breakdown"
+      );
+
+      // Volume order TTL cleanup (cancel stale vol-* orders)
+      const VOL_TTL_MS = 90_000; // 90 seconds
+      const nowTs = Date.now();
+
+      for (const o of openOther) {
+        const cid = o.clientOrderId ?? "";
+        if (!cid.startsWith("vol-")) continue;
+
+        const m = cid.match(/^vol-(\d+)/);
+        if (!m) continue;
+
+        const ts = Number(m[1]);
+        if (!Number.isFinite(ts)) continue;
+
+        if (nowTs - ts > VOL_TTL_MS) {
+          try {
+            await exchange.cancelOrder(symbol, o.id);
+            log.info({ orderId: o.id, clientOrderId: cid }, "stale volume order cancelled");
+          } catch (e) {
+            log.warn({ err: String(e), orderId: o.id }, "failed to cancel stale volume order");
+          }
+        }
+      }
 
       const invRatio = inventoryRatio(balances, base, mm.budgetBaseToken);
       const desiredQuotes = mmStrat.build(symbol, mid.mid, invRatio);
@@ -121,6 +209,9 @@ export async function runLoop(params: {
           bid: mid.bid ?? null,
           ask: mid.ask ?? null,
           openOrders: open.length,
+          openOrdersMm: openMm.length,
+          openOrdersVol: openVol.length,
+          lastVolClientOrderId,
           freeUsdt,
           freeBase,
           tradedNotionalToday: volState.tradedNotional
@@ -129,8 +220,8 @@ export async function runLoop(params: {
         break;
       }
 
-      // MM sync
-      const { cancel, place } = orderMgr.diff(desiredQuotes, open);
+      // MM sync (only manage mm-* orders so we don't cancel volume orders)
+      const { cancel, place } = orderMgr.diff(desiredQuotes, openMm);
 
       for (const o of cancel) {
         try {
@@ -146,7 +237,7 @@ export async function runLoop(params: {
         }
       }
 
-      // Volume bot (MVP = small market orders)
+      // Volume bot (PASSIVE-first: post-only limit near mid; MIXED may use rare market)
       const volOrder = volSched.maybeCreateTrade(symbol, mid.mid, volState);
       if (volOrder) {
         try {
@@ -165,6 +256,9 @@ export async function runLoop(params: {
         bid: mid.bid ?? null,
         ask: mid.ask ?? null,
         openOrders: open.length,
+        openOrdersMm: openMm.length,
+        openOrdersVol: openVol.length,
+        lastVolClientOrderId,
         freeUsdt,
         freeBase,
         tradedNotionalToday: volState.tradedNotional
@@ -179,7 +273,15 @@ export async function runLoop(params: {
         await exchange.cancelAll(symbol);
       } catch {}
       sm.set("ERROR", String(e));
-      await writeRuntime({ botId, status: "ERROR", reason: sm.getReason() });
+      await writeRuntime({
+        botId,
+        status: "ERROR",
+        reason: sm.getReason(),
+        openOrders: 0,
+        openOrdersMm: 0,
+        openOrdersVol: 0,
+        lastVolClientOrderId: null
+      });
       break;
     }
   }

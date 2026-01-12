@@ -23,6 +23,11 @@ export default function Setup() {
 
   return (
     <div>
+      <div style={{ marginBottom: 10 }}>
+        <a href="/" style={{ fontSize: 13 }}>
+          ← Back to dashboard
+        </a>
+      </div>
       <h2>Setup</h2>
       <button onClick={create}>Create default bot (local-bot-1)</button>
       <p>{msg}</p>

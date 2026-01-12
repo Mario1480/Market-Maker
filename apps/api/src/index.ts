@@ -44,6 +44,13 @@ const RiskConfig = z.object({
   maxDailyLoss: z.number()
 });
 
+const CexConfig = z.object({
+  exchange: z.string(),
+  apiKey: z.string(),
+  apiSecret: z.string(),
+  apiMemo: z.string().optional()
+});
+
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.get("/bots", async (_req, res) => {
@@ -63,6 +70,12 @@ app.get("/bots/:id", async (req, res) => {
 app.get("/bots/:id/runtime", async (req, res) => {
   const rt = await prisma.botRuntime.findUnique({ where: { botId: req.params.id } });
   res.json(rt ?? null);
+});
+
+app.get("/settings/cex/:exchange", async (req, res) => {
+  const exchange = req.params.exchange;
+  const cfg = await prisma.cexConfig.findUnique({ where: { exchange } });
+  res.json(cfg ?? null);
 });
 
 app.post("/bots", async (req, res) => {
@@ -138,6 +151,25 @@ app.put("/bots/:id/config", async (req, res) => {
   });
 
   res.json({ ok: true });
+});
+
+app.put("/settings/cex", async (req, res) => {
+  const data = CexConfig.parse(req.body);
+  const cfg = await prisma.cexConfig.upsert({
+    where: { exchange: data.exchange },
+    update: {
+      apiKey: data.apiKey,
+      apiSecret: data.apiSecret,
+      apiMemo: data.apiMemo
+    },
+    create: {
+      exchange: data.exchange,
+      apiKey: data.apiKey,
+      apiSecret: data.apiSecret,
+      apiMemo: data.apiMemo
+    }
+  });
+  res.json(cfg);
 });
 
 app.post("/bots/:id/start", async (req, res) => {

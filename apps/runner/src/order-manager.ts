@@ -15,23 +15,21 @@ export class OrderManager {
   ) {}
 
   diff(desired: Quote[], open: Order[]): { cancel: Order[]; place: Quote[] } {
+    const openManaged = open.filter((o) => (o.clientOrderId ?? "").startsWith("mm-"));
+
     const openByClient = new Map<string, Order>();
-    for (const o of open) {
+    for (const o of openManaged) {
       if (o.clientOrderId) openByClient.set(o.clientOrderId, o);
     }
 
     const place: Quote[] = [];
-    const keepIds = new Set<string>();
 
     for (const q of desired) {
-      const k = key(q);
       const existing = q.clientOrderId ? openByClient.get(q.clientOrderId) : undefined;
       if (!existing) {
         place.push(q);
         continue;
       }
-
-      keepIds.add(existing.id);
 
       // replace if price/qty drifted materially
       const priceChanged =
@@ -49,14 +47,12 @@ export class OrderManager {
     }
 
     const cancel: Order[] = [];
-    for (const o of open) {
+    for (const o of openManaged) {
       // cancel any open not in desired set of clientOrderId keys
       if (o.clientOrderId && desired.some((q) => q.clientOrderId === o.clientOrderId)) {
         // might still be replaced: loop will cancel if needed based on place list
         continue;
       }
-      // if no clientOrderId, we can be strict and cancel (keeps system clean)
-      if (!o.clientOrderId) cancel.push(o);
       // else: if not desired, cancel
       if (o.clientOrderId && !desired.some((q) => q.clientOrderId === o.clientOrderId)) cancel.push(o);
     }

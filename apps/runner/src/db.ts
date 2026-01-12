@@ -53,6 +53,9 @@ export async function writeRuntime(params: {
   bid?: number | null;
   ask?: number | null;
   openOrders?: number | null;
+  openOrdersMm?: number | null;
+  openOrdersVol?: number | null;
+  lastVolClientOrderId?: string | null;
   freeUsdt?: number | null;
   freeBase?: number | null;
   tradedNotionalToday?: number | null;
@@ -67,6 +70,9 @@ export async function writeRuntime(params: {
       bid: params.bid ?? null,
       ask: params.ask ?? null,
       openOrders: params.openOrders ?? null,
+      openOrdersMm: params.openOrdersMm ?? null,
+      openOrdersVol: params.openOrdersVol ?? null,
+      lastVolClientOrderId: params.lastVolClientOrderId ?? null,
       freeUsdt: params.freeUsdt ?? null,
       freeBase: params.freeBase ?? null,
       tradedNotionalToday: params.tradedNotionalToday ?? null
@@ -78,6 +84,9 @@ export async function writeRuntime(params: {
       bid: params.bid ?? null,
       ask: params.ask ?? null,
       openOrders: params.openOrders ?? null,
+      openOrdersMm: params.openOrdersMm ?? null,
+      openOrdersVol: params.openOrdersVol ?? null,
+      lastVolClientOrderId: params.lastVolClientOrderId ?? null,
       freeUsdt: params.freeUsdt ?? null,
       freeBase: params.freeBase ?? null,
       tradedNotionalToday: params.tradedNotionalToday ?? null

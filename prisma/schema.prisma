@@ -69,10 +69,29 @@ model BotRuntime {
   mid        Float?
   bid        Float?
   ask        Float?
+
+  // total open orders (all types)
   openOrders Int?
+
+  // separated counts
+  openOrdersMm  Int?
+  openOrdersVol Int?
+
+  // last passive volume order (clientOrderId like vol-<ts>)
+  lastVolClientOrderId String?
 
   freeUsdt Float?
   freeBase Float?
 
   tradedNotionalToday Float?
+}
+
+model CexConfig {
+  id        String   @id @default(uuid())
+  exchange  String   @unique
+  apiKey    String
+  apiSecret String
+  apiMemo   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
