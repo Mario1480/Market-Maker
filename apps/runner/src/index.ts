@@ -4,7 +4,7 @@ import type { Exchange } from "@mm/exchange";
 import { BotStateMachine } from "./state-machine.js";
 import { runLoop } from "./loop.js";
 import { log } from "./logger.js";
-import { loadBotAndConfigs } from "./db.js";
+import { loadBotAndConfigs, loadCexConfig } from "./db.js";
 
 function mustEnv(k: string): string {
   const v = process.env[k];
@@ -19,11 +19,16 @@ async function main() {
   const { bot, mm, vol, risk } = await loadBotAndConfigs(botId);
   const symbol = bot.symbol;
 
+  if (bot.exchange !== "bitmart") {
+    throw new Error(`Unsupported exchange: ${bot.exchange}`);
+  }
+
+  const cex = await loadCexConfig(bot.exchange);
   const rest = new BitmartRestClient(
     mustEnv("BITMART_BASE_URL"),
-    mustEnv("BITMART_API_KEY"),
-    mustEnv("BITMART_API_SECRET"),
-    mustEnv("BITMART_API_MEMO")
+    cex.apiKey,
+    cex.apiSecret,
+    cex.apiMemo ?? ""
   );
 
   const exchange: Exchange = {

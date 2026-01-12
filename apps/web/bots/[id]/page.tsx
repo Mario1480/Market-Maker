@@ -73,7 +73,7 @@ export default function BotPage({ params }: { params: { id: string } }) {
         <section style={{ border: "1px solid #ddd", padding: 12 }}>
           <h3>Market Making</h3>
           <Field label="spreadPct" value={mm.spreadPct} onChange={(v) => setMm({ ...mm, spreadPct: Number(v) })} />
-          <Field label="stepPct" value={mm.stepPct} onChange={(v) => setMm({ ...mm, stepPct: Number(v) })} />
+          <Field label="maxSpreadPct" value={mm.maxSpreadPct} onChange={(v) => setMm({ ...mm, maxSpreadPct: Number(v) })} />
           <Field label="levelsUp" value={mm.levelsUp} onChange={(v) => setMm({ ...mm, levelsUp: Number(v) })} />
           <Field label="levelsDown" value={mm.levelsDown} onChange={(v) => setMm({ ...mm, levelsDown: Number(v) })} />
           <Field label="budgetQuoteUsdt" value={mm.budgetQuoteUsdt} onChange={(v) => setMm({ ...mm, budgetQuoteUsdt: Number(v) })} />

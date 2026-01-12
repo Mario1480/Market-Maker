@@ -14,6 +14,7 @@ export default function BotPage() {
   const [bot, setBot] = useState<any>(null);
   const [rt, setRt] = useState<any>(null);
   const [saving, setSaving] = useState("");
+  const [toggling, setToggling] = useState("");
 
   const [mm, setMm] = useState<any>(null);
   const [vol, setVol] = useState<any>(null);
@@ -116,6 +117,54 @@ export default function BotPage() {
     }
   }
 
+  async function startMm() {
+    try {
+      setToggling("mm");
+      await apiPost(`/bots/${id}/mm/start`);
+      await loadAll();
+    } catch (e) {
+      showToast("error", errMsg(e));
+    } finally {
+      setToggling("");
+    }
+  }
+
+  async function stopMm() {
+    try {
+      setToggling("mm");
+      await apiPost(`/bots/${id}/mm/stop`);
+      await loadAll();
+    } catch (e) {
+      showToast("error", errMsg(e));
+    } finally {
+      setToggling("");
+    }
+  }
+
+  async function startVol() {
+    try {
+      setToggling("vol");
+      await apiPost(`/bots/${id}/vol/start`);
+      await loadAll();
+    } catch (e) {
+      showToast("error", errMsg(e));
+    } finally {
+      setToggling("");
+    }
+  }
+
+  async function stopVol() {
+    try {
+      setToggling("vol");
+      await apiPost(`/bots/${id}/vol/stop`);
+      await loadAll();
+    } catch (e) {
+      showToast("error", errMsg(e));
+    } finally {
+      setToggling("");
+    }
+  }
+
   if (!bot || !mm || !vol || !risk) return <div>Loading…</div>;
 
   return (
@@ -154,6 +203,17 @@ export default function BotPage() {
         </div>
         <div style={{ fontSize: 12, opacity: 0.8 }}>
           <div>Bot status: <b>{bot.status}</b></div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span>MM:</span>
+            <span className={`badge ${bot.mmEnabled ? "badgeOk" : "badgeWarn"}`}>
+              {bot.mmEnabled ? "enabled" : "disabled"}
+            </span>
+            <span>Volume:</span>
+            <span className={`badge ${bot.volEnabled ? "badgeOk" : "badgeWarn"}`}>
+              {bot.volEnabled ? "enabled" : "disabled"}
+            </span>
+            <span style={{ opacity: 0.7 }}>independent toggles</span>
+          </div>
           <div>Runtime: <b>{rt?.status ?? "—"}</b>{rt?.reason ? ` — ${rt.reason}` : ""}</div>
         </div>
       </div>
@@ -189,6 +249,43 @@ export default function BotPage() {
           {dirty ? "Save Config" : "Saved"}
         </button>
         <span style={{ alignSelf: "center", fontSize: 12 }}>{saving}</span>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+        <span style={{ fontSize: 12, opacity: 0.8 }}>Market Making</span>
+        <button
+          onClick={startMm}
+          disabled={toggling === "mm" || bot.mmEnabled === true}
+          className={`btn btnStart ${toggling === "mm" || bot.mmEnabled ? "btnDisabled" : ""}`}
+          title="Start market making only (volume stays as is)"
+        >
+          Start MM
+        </button>
+        <button
+          onClick={stopMm}
+          disabled={toggling === "mm" || bot.mmEnabled === false}
+          className={`btn btnStop ${toggling === "mm" || !bot.mmEnabled ? "btnDisabled" : ""}`}
+          title="Stop market making only (volume stays as is)"
+        >
+          Stop MM
+        </button>
+        <span style={{ fontSize: 12, opacity: 0.8, marginLeft: 8 }}>Volume Bot</span>
+        <button
+          onClick={startVol}
+          disabled={toggling === "vol" || bot.volEnabled === true}
+          className={`btn btnStart ${toggling === "vol" || bot.volEnabled ? "btnDisabled" : ""}`}
+          title="Start volume bot only (MM stays as is)"
+        >
+          Start Volume
+        </button>
+        <button
+          onClick={stopVol}
+          disabled={toggling === "vol" || bot.volEnabled === false}
+          className={`btn btnStop ${toggling === "vol" || !bot.volEnabled ? "btnDisabled" : ""}`}
+          title="Stop volume bot only (MM stays as is)"
+        >
+          Stop Volume
+        </button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>

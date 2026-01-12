@@ -21,9 +21,16 @@ export function buildQuotes(params: {
 
   const quotes: Quote[] = [];
 
+  const halfMin = cfg.spreadPct / 2;
+  const halfMax = cfg.maxSpreadPct / 2;
+
+  const buyDenom = Math.max(1, buyN - 1);
+  const sellDenom = Math.max(1, sellN - 1);
+
   // Buy levels
   for (let i = 0; i < buyN; i++) {
-    const base = skewedMid * (1 - cfg.spreadPct / 2 - i * cfg.stepPct);
+    const pct = halfMin + (i / buyDenom) * Math.max(0, halfMax - halfMin);
+    const base = skewedMid * (1 - pct);
     const jitter = cfg.jitterPct > 0 ? (1 + randBetween(-cfg.jitterPct, cfg.jitterPct)) : 1;
     const price = base * jitter;
 
@@ -37,13 +44,14 @@ export function buildQuotes(params: {
       price,
       qty,
       postOnly: true,
-      clientOrderId: `mm-b-${i}`
+      clientOrderId: `mmb${i}`
     });
   }
 
   // Sell levels
   for (let i = 0; i < sellN; i++) {
-    const base = skewedMid * (1 + cfg.spreadPct / 2 + i * cfg.stepPct);
+    const pct = halfMin + (i / sellDenom) * Math.max(0, halfMax - halfMin);
+    const base = skewedMid * (1 + pct);
     const jitter = cfg.jitterPct > 0 ? (1 + randBetween(-cfg.jitterPct, cfg.jitterPct)) : 1;
     const price = base * jitter;
 
@@ -56,7 +64,7 @@ export function buildQuotes(params: {
       price,
       qty,
       postOnly: true,
-      clientOrderId: `mm-s-${i}`
+      clientOrderId: `mms${i}`
     });
   }
 

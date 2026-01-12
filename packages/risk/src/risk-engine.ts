@@ -18,24 +18,32 @@ export class RiskEngine {
   evaluate(ctx: RiskContext): RiskDecision {
     const usdt = ctx.balances.find((b) => b.asset.toUpperCase() === "USDT")?.free ?? 0;
 
-    if (usdt < this.cfg.minUsdt) {
+    if (this.cfg.minUsdt > 0 && usdt < this.cfg.minUsdt) {
       return { ok: false, action: "STOP", reason: `USDT below minimum: ${usdt} < ${this.cfg.minUsdt}` };
     }
 
-    if (ctx.openOrdersCount > this.cfg.maxOpenOrders) {
+    if (this.cfg.maxOpenOrders > 0 && ctx.openOrdersCount > this.cfg.maxOpenOrders) {
       return { ok: false, action: "PAUSE", reason: `Too many open orders: ${ctx.openOrdersCount}` };
     }
 
-    if (typeof ctx.deviationPct === "number" && ctx.deviationPct > this.cfg.maxDeviationPct) {
+    if (
+      this.cfg.maxDeviationPct > 0 &&
+      typeof ctx.deviationPct === "number" &&
+      ctx.deviationPct > this.cfg.maxDeviationPct
+    ) {
       return { ok: false, action: "PAUSE", reason: `Price deviation too high: ${ctx.deviationPct}%` };
     }
 
-    if (typeof ctx.dailyPnl === "number" && ctx.dailyPnl < -Math.abs(this.cfg.maxDailyLoss)) {
+    if (
+      this.cfg.maxDailyLoss > 0 &&
+      typeof ctx.dailyPnl === "number" &&
+      ctx.dailyPnl < -Math.abs(this.cfg.maxDailyLoss)
+    ) {
       return { ok: false, action: "STOP", reason: `Daily loss limit reached: ${ctx.dailyPnl}` };
     }
 
-    // Stale data guard (2s)
-    if (Date.now() - ctx.mid.ts > 2000) {
+    // Stale data guard (10s)
+    if (Date.now() - ctx.mid.ts > 10_000) {
       return { ok: false, action: "PAUSE", reason: "Stale market data" };
     }
 

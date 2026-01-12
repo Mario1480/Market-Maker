@@ -13,6 +13,8 @@ model Bot {
   symbol    String
   exchange  String
   status    String
+  mmEnabled Boolean  @default(true)
+  volEnabled Boolean @default(true)
   createdAt DateTime @default(now())
 
   mmConfig   MarketMakingConfig?
@@ -26,7 +28,7 @@ model MarketMakingConfig {
   botId           String @unique
   bot             Bot    @relation(fields: [botId], references: [id])
   spreadPct       Float
-  stepPct         Float
+  maxSpreadPct    Float @default(0.0015)
   levelsUp        Int
   levelsDown      Int
   budgetQuoteUsdt Float

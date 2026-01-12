@@ -15,7 +15,7 @@ export async function loadBotAndConfigs(botId: string) {
 
   const mm: MarketMakingConfig = {
     spreadPct: bot.mmConfig.spreadPct,
-    stepPct: bot.mmConfig.stepPct,
+    maxSpreadPct: bot.mmConfig.maxSpreadPct,
     levelsUp: bot.mmConfig.levelsUp,
     levelsDown: bot.mmConfig.levelsDown,
     budgetQuoteUsdt: bot.mmConfig.budgetQuoteUsdt,
@@ -43,6 +43,17 @@ export async function loadBotAndConfigs(botId: string) {
   };
 
   return { bot, mm, vol, risk };
+}
+
+export async function loadCexConfig(exchange: string) {
+  const cfg = await prisma.cexConfig.findUnique({ where: { exchange } });
+
+  if (!cfg) throw new Error(`CEX config not found for exchange: ${exchange}`);
+  if (!cfg.apiKey || !cfg.apiSecret) {
+    throw new Error(`CEX config incomplete for exchange: ${exchange}`);
+  }
+
+  return cfg;
 }
 
 export async function writeRuntime(params: {

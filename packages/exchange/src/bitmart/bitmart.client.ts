@@ -124,29 +124,108 @@ export class BitmartRestClient {
 
     const res = await fetch(url, { method: "GET" });
     const json: any = await res.json();
+    if (process.env.BITMART_DEBUG === "1") {
+      const shape = Array.isArray(json?.data) ? "array" : typeof json?.data;
+      console.log("[bitmart] ticker raw", JSON.stringify(json));
+      console.log("[bitmart] ticker data shape", shape);
+    }
     if (!res.ok || json?.code !== 1000) {
       throw new Error(`Ticker failed: ${json?.message || res.statusText}`);
     }
-    const data = json.data;
-    const bid = Number(data.best_bid);
-    const ask = Number(data.best_ask);
-    const mid = (bid + ask) / 2;
+    const data = Array.isArray(json.data) ? json.data[0] ?? {} : json.data ?? {};
+    let bid = Number(
+      data.best_bid ??
+        data.bestBid ??
+        data.bid ??
+        data.bid_price ??
+        data.bidPrice ??
+        0
+    );
+    let ask = Number(
+      data.best_ask ??
+        data.bestAsk ??
+        data.ask ??
+        data.ask_price ??
+        data.askPrice ??
+        0
+    );
+    const last = Number(
+      data.last_price ??
+        data.lastPrice ??
+        data.last ??
+        data.close ??
+        data.price ??
+        0
+    );
+    const mid =
+      bid > 0 && ask > 0
+        ? (bid + ask) / 2
+        : last > 0
+          ? last
+          : NaN;
+
+    if ((bid <= 0 || ask <= 0) && last > 0) {
+      bid = last;
+      ask = last;
+      if (process.env.BITMART_DEBUG === "1") {
+        console.log("[bitmart] bid/ask missing, fallback to last", { bid, ask, last, symbol: s });
+      }
+    }
+
+    if (!Number.isFinite(mid) || mid <= 0) {
+      throw new Error(`Ticker missing prices for ${s}`);
+    }
     return { bid, ask, mid, ts: nowMs() };
   }
 
   // ---------- Private ----------
 
   async getBalances(): Promise<Balance[]> {
-    // Spot wallet balance is KEYED in Bitmart docs; endpoint commonly:
-    // /account/v1/wallet (KEYED). Some accounts use /account/v1/wallet (or /account/v2/wallet)
-    // We'll use /account/v1/wallet and fail fast if differs.
-    const json: any = await this.request("GET", "/account/v1/wallet", undefined, "KEYED");
-    const arr: any[] = json.data?.wallet ?? json.data ?? [];
-    return arr.map((x) => ({
-      asset: String(x.id || x.currency || x.coin_name || x.symbol),
-      free: Number(x.available || x.available_balance || x.available_amount || 0),
-      locked: Number(x.frozen || x.frozen_balance || x.frozen_amount || 0)
-    }));
+    const endpoints = [
+      "/account/v1/wallet",
+      "/account/v2/wallet",
+      "/spot/v1/wallet"
+    ];
+
+    let lastErr: unknown = null;
+    for (const path of endpoints) {
+      try {
+        const json: any = await this.request("GET", path, undefined, "KEYED");
+        const arr: any[] =
+          json?.data?.wallet ??
+          json?.data?.list ??
+          json?.data?.balances ??
+          json?.data?.result ??
+          json?.data ??
+          [];
+
+        if (!Array.isArray(arr) || arr.length === 0) continue;
+
+        return arr.map((x) => ({
+          asset: String(x.id || x.currency || x.coin_name || x.symbol || x.asset || x.coin),
+          free: Number(
+            x.available ??
+              x.available_balance ??
+              x.available_amount ??
+              x.availableBalance ??
+              x.free ??
+              0
+          ),
+          locked: Number(
+            x.frozen ??
+              x.frozen_balance ??
+              x.frozen_amount ??
+              x.locked ??
+              0
+          )
+        }));
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+
+    if (lastErr) throw lastErr;
+    return [];
   }
 
   async placeOrder(q: Quote): Promise<Order> {

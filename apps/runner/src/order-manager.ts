@@ -15,7 +15,10 @@ export class OrderManager {
   ) {}
 
   diff(desired: Quote[], open: Order[]): { cancel: Order[]; place: Quote[] } {
-    const openManaged = open.filter((o) => (o.clientOrderId ?? "").startsWith("mm-"));
+  const openManaged = open.filter((o) => {
+    const cid = o.clientOrderId ?? "";
+    return cid.startsWith("mmb") || cid.startsWith("mms");
+  });
 
     const openByClient = new Map<string, Order>();
     for (const o of openManaged) {

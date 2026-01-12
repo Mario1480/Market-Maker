@@ -1,4 +1,5 @@
 import "dotenv/config";
+import crypto from "node:crypto";
 import express from "express";
 import cors from "cors";
 import { prisma } from "@mm/db";
@@ -17,7 +18,7 @@ const BotCreate = z.object({
 
 const MMConfig = z.object({
   spreadPct: z.number(),
-  stepPct: z.number(),
+  maxSpreadPct: z.number(),
   levelsUp: z.number().int(),
   levelsDown: z.number().int(),
   budgetQuoteUsdt: z.number(),
@@ -78,6 +79,17 @@ app.get("/settings/cex/:exchange", async (req, res) => {
   res.json(cfg ?? null);
 });
 
+app.get("/settings/cex", async (_req, res) => {
+  const items = await prisma.cexConfig.findMany({ orderBy: { updatedAt: "desc" } });
+  res.json(items);
+});
+
+app.delete("/settings/cex/:exchange", async (req, res) => {
+  const exchange = req.params.exchange;
+  await prisma.cexConfig.delete({ where: { exchange } });
+  res.json({ ok: true });
+});
+
 app.post("/bots", async (req, res) => {
   const data = BotCreate.parse(req.body);
 
@@ -88,10 +100,12 @@ app.post("/bots", async (req, res) => {
       symbol: data.symbol,
       exchange: data.exchange,
       status: "STOPPED",
+      mmEnabled: true,
+      volEnabled: true,
       mmConfig: {
         create: {
           spreadPct: 0.004,
-          stepPct: 0.0015,
+          maxSpreadPct: 0.0015,
           levelsUp: 5,
           levelsDown: 5,
           budgetQuoteUsdt: 2000,
@@ -153,6 +167,30 @@ app.put("/bots/:id/config", async (req, res) => {
   res.json({ ok: true });
 });
 
+app.post("/bots/:id/mm/start", async (req, res) => {
+  const botId = req.params.id;
+  await prisma.bot.update({ where: { id: botId }, data: { mmEnabled: true } });
+  res.json({ ok: true });
+});
+
+app.post("/bots/:id/mm/stop", async (req, res) => {
+  const botId = req.params.id;
+  await prisma.bot.update({ where: { id: botId }, data: { mmEnabled: false } });
+  res.json({ ok: true });
+});
+
+app.post("/bots/:id/vol/start", async (req, res) => {
+  const botId = req.params.id;
+  await prisma.bot.update({ where: { id: botId }, data: { volEnabled: true } });
+  res.json({ ok: true });
+});
+
+app.post("/bots/:id/vol/stop", async (req, res) => {
+  const botId = req.params.id;
+  await prisma.bot.update({ where: { id: botId }, data: { volEnabled: false } });
+  res.json({ ok: true });
+});
+
 app.put("/settings/cex", async (req, res) => {
   const data = CexConfig.parse(req.body);
   const cfg = await prisma.cexConfig.upsert({
@@ -170,6 +208,40 @@ app.put("/settings/cex", async (req, res) => {
     }
   });
   res.json(cfg);
+});
+
+app.post("/settings/cex/verify", async (req, res) => {
+  const data = CexConfig.parse(req.body);
+
+  // Minimal auth-protected call: balances requires signed headers.
+  const baseUrl = process.env.BITMART_BASE_URL || "https://api-cloud.bitmart.com";
+  const url = new URL("/spot/v1/wallet", baseUrl);
+  const timestamp = Date.now().toString();
+  const body = "{}";
+  const payload = `${timestamp}#${data.apiMemo ?? ""}#${body}`;
+  const sign = crypto
+    .createHmac("sha256", data.apiSecret)
+    .update(payload)
+    .digest("hex");
+
+  const resp = await fetch(url, {
+    method: "GET",
+    headers: {
+      "X-BM-KEY": data.apiKey,
+      "X-BM-SIGN": sign,
+      "X-BM-TIMESTAMP": timestamp,
+      "Content-Type": "application/json"
+    }
+  });
+
+  const json = await resp.json().catch(() => ({}));
+
+  if (!resp.ok || (json?.code && json.code !== 1000)) {
+    const msg = json?.msg || json?.message || "verify failed";
+    return res.status(400).json({ ok: false, error: msg, details: json });
+  }
+
+  res.json({ ok: true });
 });
 
 app.post("/bots/:id/start", async (req, res) => {

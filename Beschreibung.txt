@@ -1,0 +1,93 @@
+Gerne 🙂
+Hier ist eine kurze, klare Anleitung, so wie du sie direkt in eine Doku oder ins UI übernehmen kannst.
+
+⸻
+
+Jitter (%) – Randomize prices slightly
+
+Was es macht:
+Fügt deinen Orderpreisen eine kleine Zufallsabweichung hinzu.
+
+Warum:
+	•	Verhindert, dass dein Bot leicht erkannt wird
+	•	Macht Preise weniger vorhersagbar
+	•	Reduziert Sniping & gezielte Arbitrage
+
+Wie es wirkt:
+	•	Preis wird zufällig um ± Jitter % verschoben
+	•	Beeinflusst nicht den Spread, nur die Feinpositionierung
+
+Empfohlene Werte:
+	•	Low Cap: 0.1 – 0.3 %
+	•	Mid Cap: 0.05 – 0.15 %
+	•	High Liquidity: 0 – 0.05 %
+
+⸻
+
+Skew Factor – Inventory based price shift
+
+Was es macht:
+Verschiebt Bid- und Ask-Preise abhängig von deinem Token-Bestand.
+
+Warum:
+	•	Reduziert einseitige Inventory-Risiken
+	•	Fördert automatisches Rebalancing
+	•	Verhindert „voll laufen“ in eine Richtung
+
+Wie es wirkt:
+	•	Zu viel Token → Preise werden verkaufsfreundlicher
+	•	Zu wenig Token → Preise werden kauffreundlicher
+	•	Stärke der Verschiebung wird durch den Skew Factor bestimmt
+
+Empfohlene Werte:
+	•	Startwert: 0.5 – 1.0
+	•	Aggressiv: > 1.5
+	•	Konservativ: < 0.5
+
+⸻
+
+Max Skew – Clamp for inventory skew
+
+Was es macht:
+Begrenzt die maximale Preisverschiebung durch den Skew.
+
+Warum:
+	•	Verhindert extreme Preise
+	•	Schützt vor schlechtem Rebalancing
+	•	Hält Quotes marktnah
+
+Wie es wirkt:
+	•	Skew wird auf ± Max Skew % begrenzt
+	•	Auch bei starkem Inventory-Ungleichgewicht
+
+Empfohlene Werte:
+	•	Low Cap: 1 – 3 %
+	•	Mid Cap: 0.5 – 1.5 %
+	•	High Liquidity: < 0.5 %
+
+⸻
+
+Zusammenspiel (wichtig)
+	•	Skew = strategische Verschiebung (Risiko-Steuerung)
+	•	Max Skew = Sicherheitsbremse
+	•	Jitter = Tarnung & Feinvariation
+
+👉 Reihenfolge im Code:
+	1.	Spread
+	2.	Skew (Inventory)
+	3.	Max Skew Clamp
+	4.	Jitter
+
+⸻
+
+Kurzempfehlung für USHARK / Low Cap
+
+Jitter (%)     : 0.15 – 0.25
+Skew Factor    : 0.7 – 1.0
+Max Skew (%)   : 1.5 – 2.5
+
+Wenn du willst, kann ich dir daraus auch:
+	•	Tooltip-Texte fürs UI
+	•	oder eine Markdown-Doku
+	•	oder ein Preset („Low Cap / Mid Cap / High Liquidity“) erstellen
+    

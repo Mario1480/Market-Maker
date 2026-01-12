@@ -59,7 +59,7 @@ export class VolumeScheduler {
     const notional = Math.min(remaining, randBetween(this.cfg.minTradeUsdt, this.cfg.maxTradeUsdt));
     const side = Math.random() < 0.5 ? "buy" : "sell";
 
-    const clientOrderId = `vol-${now}`;
+    const clientOrderId = `vol${now}`;
 
     // PASSIVE-first: post-only limit close to mid
     const price = passivePrice(mid, side);

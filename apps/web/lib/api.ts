@@ -23,7 +23,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(
-  method: "GET" | "POST" | "PUT",
+  method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
   body?: any
 ): Promise<T> {
@@ -63,4 +63,8 @@ export function apiPost<T>(path: string, body?: any): Promise<T> {
 
 export function apiPut<T>(path: string, body: any): Promise<T> {
   return request<T>("PUT", path, body);
+}
+
+export function apiDelete<T>(path: string): Promise<T> {
+  return request<T>("DELETE", path);
 }

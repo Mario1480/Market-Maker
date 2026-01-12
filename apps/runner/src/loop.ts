@@ -10,8 +10,14 @@ import { inventoryRatio } from "./inventory.js";
 import { log } from "./logger.js";
 import { loadBotAndConfigs, writeRuntime } from "./db.js";
 
+function normalizeAsset(a: string): string {
+  return a.toUpperCase().split("-")[0];
+}
+
 function findFree(balances: Balance[], asset: string): number {
-  return balances.find((b) => b.asset.toUpperCase() === asset.toUpperCase())?.free ?? 0;
+  const target = normalizeAsset(asset);
+  const direct = balances.find((b) => normalizeAsset(b.asset) === target);
+  return direct?.free ?? 0;
 }
 
 export async function runLoop(params: {
@@ -25,6 +31,7 @@ export async function runLoop(params: {
   sm: BotStateMachine;
 }): Promise<void> {
   const { botId, symbol, exchange, tickMs, sm } = params;
+  const debug = process.env.RUNNER_DEBUG === "1";
 
   let mm = params.mm;
   let vol = params.vol;
@@ -38,6 +45,7 @@ export async function runLoop(params: {
 
   const volState = { dayKey: "init", tradedNotional: 0, lastActionMs: 0 };
   const { base } = splitSymbol(symbol);
+  const mmSeed = Math.random().toString(36).slice(2, 8);
 
   const reloadEveryMs = 5_000;
   let lastReload = 0;
@@ -133,17 +141,42 @@ export async function runLoop(params: {
       const mid = await priceSource.getMid(symbol);
       const balances = await exchange.getBalances();
       const open = await exchange.getOpenOrders(symbol);
-      const openMm = open.filter((o) => (o.clientOrderId ?? "").startsWith("mm-"));
-      const openOther = open.filter((o) => !(o.clientOrderId ?? "").startsWith("mm-"));
+      const midValid =
+        Number.isFinite(mid.mid) &&
+        mid.mid > 0 &&
+        Number.isFinite(mid.bid) &&
+        (mid.bid as number) > 0 &&
+        Number.isFinite(mid.ask) &&
+        (mid.ask as number) > 0;
+      if (debug) {
+        log.info(
+          {
+            mid: mid.mid,
+            bid: mid.bid ?? null,
+            ask: mid.ask ?? null,
+            balancesCount: balances.length,
+            openOrders: open.length
+          },
+          "tick snapshot"
+        );
+      }
+      const openMm = open.filter((o) => {
+        const cid = o.clientOrderId ?? "";
+        return cid.startsWith("mmb") || cid.startsWith("mms");
+      });
+      const openOther = open.filter((o) => {
+        const cid = o.clientOrderId ?? "";
+        return !(cid.startsWith("mmb") || cid.startsWith("mms"));
+      });
       log.debug({ openTotal: open.length, openMm: openMm.length, openOther: openOther.length }, "open orders split");
 
-      const openVol = openOther.filter((o) => (o.clientOrderId ?? "").startsWith("vol-"));
+      const openVol = openOther.filter((o) => (o.clientOrderId ?? "").startsWith("vol"));
 
       let lastVolClientOrderId: string | null = null;
       let lastVolTs = -1;
       for (const o of openVol) {
         const cid = o.clientOrderId ?? "";
-        const m = cid.match(/^vol-(\d+)/);
+        const m = cid.match(/^vol(\d+)/);
         if (!m) continue;
         const ts = Number(m[1]);
         if (!Number.isFinite(ts)) continue;
@@ -158,15 +191,54 @@ export async function runLoop(params: {
         "open orders breakdown"
       );
 
+      if (!botRow.mmEnabled && openMm.length) {
+        for (const o of openMm) {
+          try {
+            await exchange.cancelOrder(symbol, o.id);
+          } catch {}
+        }
+      }
+
+      if (!botRow.volEnabled && openVol.length) {
+        for (const o of openVol) {
+          try {
+            await exchange.cancelOrder(symbol, o.id);
+          } catch {}
+        }
+      }
+
+      if (!midValid) {
+        log.warn({ mid }, "market data invalid (bid/ask/mid)");
+        await writeRuntime({
+          botId,
+          status: "RUNNING",
+          reason: "Market data unavailable",
+          mid: Number.isFinite(mid.mid) ? mid.mid : null,
+          bid: Number.isFinite(mid.bid) ? mid.bid : null,
+          ask: Number.isFinite(mid.ask) ? mid.ask : null,
+          openOrders: open.length,
+          openOrdersMm: openMm.length,
+          openOrdersVol: openVol.length,
+          lastVolClientOrderId,
+          freeUsdt: findFree(balances, "USDT"),
+          freeBase: findFree(balances, base),
+          tradedNotionalToday: volState.tradedNotional
+        });
+        const elapsed = Date.now() - t0;
+        const sleep = Math.max(0, tickMs - elapsed);
+        await new Promise((r) => setTimeout(r, sleep));
+        continue;
+      }
+
       // Volume order TTL cleanup (cancel stale vol-* orders)
       const VOL_TTL_MS = 90_000; // 90 seconds
       const nowTs = Date.now();
 
       for (const o of openOther) {
         const cid = o.clientOrderId ?? "";
-        if (!cid.startsWith("vol-")) continue;
+        if (!cid.startsWith("vol")) continue;
 
-        const m = cid.match(/^vol-(\d+)/);
+        const m = cid.match(/^vol(\d+)/);
         if (!m) continue;
 
         const ts = Number(m[1]);
@@ -183,7 +255,17 @@ export async function runLoop(params: {
       }
 
       const invRatio = inventoryRatio(balances, base, mm.budgetBaseToken);
-      const desiredQuotes = mmStrat.build(symbol, mid.mid, invRatio);
+      const desiredQuotes = botRow.mmEnabled ? mmStrat.build(symbol, mid.mid, invRatio) : [];
+      const desiredWithIds = desiredQuotes.map((q) => {
+        const cid = q.clientOrderId ?? "";
+        const m = cid.match(/^(mmb|mms)(\d+)/);
+        if (!m) return q;
+        return { ...q, clientOrderId: `${m[1]}${m[2]}${mmSeed}` };
+      });
+      const desiredFiltered = desiredWithIds.filter((q) => {
+        if (q.type !== "limit" || !q.price) return true;
+        return q.price * q.qty >= 5;
+      });
 
       const decision = riskEngine.evaluate({
         balances,
@@ -193,6 +275,10 @@ export async function runLoop(params: {
 
       const freeUsdt = findFree(balances, "USDT");
       const freeBase = findFree(balances, base);
+      if (debug) {
+        const sample = balances.slice(0, 8).map((b) => ({ asset: b.asset, free: b.free, locked: b.locked }));
+        log.info({ freeUsdt, freeBase, base, sample }, "balances snapshot");
+      }
 
       if (!decision.ok) {
         log.warn({ decision }, "risk triggered");
@@ -221,7 +307,7 @@ export async function runLoop(params: {
       }
 
       // MM sync (only manage mm-* orders so we don't cancel volume orders)
-      const { cancel, place } = orderMgr.diff(desiredQuotes, openMm);
+      const { cancel, place } = orderMgr.diff(desiredFiltered, openMm);
 
       for (const o of cancel) {
         try {
@@ -237,14 +323,17 @@ export async function runLoop(params: {
         }
       }
 
+
       // Volume bot (PASSIVE-first: post-only limit near mid; MIXED may use rare market)
-      const volOrder = volSched.maybeCreateTrade(symbol, mid.mid, volState);
-      if (volOrder) {
-        try {
-          await exchange.placeOrder(volOrder);
-          log.info({ volOrder }, "volume trade submitted");
-        } catch (e) {
-          log.warn({ err: String(e), volOrder }, "volume trade failed");
+      if (botRow.volEnabled) {
+        const volOrder = volSched.maybeCreateTrade(symbol, mid.mid, volState);
+        if (volOrder) {
+          try {
+            await exchange.placeOrder(volOrder);
+            log.info({ volOrder }, "volume trade submitted");
+          } catch (e) {
+            log.warn({ err: String(e), volOrder }, "volume trade failed");
+          }
         }
       }
 

@@ -4,7 +4,7 @@ export type Money = number;
 
 export interface MarketMakingConfig {
   spreadPct: number;
-  stepPct: number;
+  maxSpreadPct: number;
   levelsUp: number;
   levelsDown: number;
   budgetQuoteUsdt: Money;
