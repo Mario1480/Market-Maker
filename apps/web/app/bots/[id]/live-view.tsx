@@ -5,9 +5,27 @@ type LiveViewProps = {
 
 export function LiveView({ runtime, baseSymbol }: LiveViewProps) {
   const baseLabel = baseSymbol ? `Free ${baseSymbol}` : "Free base";
-  const hint = buildHint(runtime);
+  const staleness = getStaleness(runtime);
+  const hint = buildHint(runtime, staleness);
+  const offline = !runtime || staleness.stale;
   return (
-    <Section title="Live Snapshot">
+    <Section
+      title="Live Snapshot"
+      right={
+        offline ? (
+          <span
+            className="badge"
+            style={{
+              borderColor: "#ef4444",
+              color: "#fca5a5"
+            }}
+          >
+            <span className="badgeDot" style={{ background: "#ef4444" }} />
+            Offline
+          </span>
+        ) : null
+      }
+    >
       {!runtime ? (
         <div style={{ fontSize: 12, opacity: 0.8 }}>No runtime yet (runner not started?)</div>
       ) : (
@@ -41,10 +59,13 @@ export function LiveView({ runtime, baseSymbol }: LiveViewProps) {
   );
 }
 
-function Section(props: { title: string; children: React.ReactNode }) {
+function Section(props: { title: string; right?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="card" style={{ padding: 12 }}>
-      <h3 style={{ marginTop: 0 }}>{props.title}</h3>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <h3 style={{ margin: 0 }}>{props.title}</h3>
+        {props.right}
+      </div>
       {props.children}
     </section>
   );
@@ -68,8 +89,20 @@ function formatUpdated(value: any) {
   return d.toLocaleString();
 }
 
-function buildHint(runtime: any): string | null {
+function getStaleness(runtime: any) {
+  const updated = runtime?.updatedAt ? new Date(runtime.updatedAt).getTime() : NaN;
+  if (!Number.isFinite(updated)) return { stale: false, ageMs: null as number | null };
+  const ageMs = Date.now() - updated;
+  return { stale: ageMs > 15_000, ageMs };
+}
+
+function buildHint(runtime: any, staleness: { stale: boolean; ageMs: number | null }): string | null {
   if (!runtime) return "Runner not started.";
+
+  if (staleness.stale && staleness.ageMs !== null) {
+    const secs = Math.round(staleness.ageMs / 1000);
+    return `No fresh data (${secs}s). Runner may be stopped or stalled.`;
+  }
 
   if (runtime.status === "PAUSED" && runtime.reason) {
     return `Paused: ${runtime.reason}`;

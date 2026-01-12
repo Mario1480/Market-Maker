@@ -95,6 +95,14 @@ a { color: inherit; }
   font-size: 24px;
   font-weight: 700;
 }
+.statNote {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.statNoteDanger {
+  color: #fca5a5;
+}
 
 .botGrid {
   display: grid;

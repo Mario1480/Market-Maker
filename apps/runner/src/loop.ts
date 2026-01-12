@@ -9,6 +9,7 @@ import { OrderManager } from "./order-manager.js";
 import { inventoryRatio } from "./inventory.js";
 import { log } from "./logger.js";
 import { loadBotAndConfigs, writeRuntime } from "./db.js";
+import { alert } from "./alerts.js";
 
 function normalizeAsset(a: string): string {
   return a.toUpperCase().split("-")[0];
@@ -43,7 +44,7 @@ export async function runLoop(params: {
   let riskEngine = new RiskEngine(risk);
   const orderMgr = new OrderManager({ priceEpsPct: 0.0005, qtyEpsPct: 0.02 });
 
-  const volState = { dayKey: "init", tradedNotional: 0, lastActionMs: 0 };
+  const volState = { dayKey: "init", tradedNotional: 0, lastActionMs: 0, dailyAlertSent: false };
   const { base } = splitSymbol(symbol);
   const mmSeed = Math.random().toString(36).slice(2, 8);
 
@@ -76,7 +77,37 @@ export async function runLoop(params: {
         openOrdersVol: 0,
         lastVolClientOrderId: null
       });
-      break;
+      // Keep the runner alive and wait until it is started again.
+      while (true) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const b = (await loadBotAndConfigs(botId)).bot;
+        if (b.status === "RUNNING") {
+          sm.set("RUNNING", "");
+          await writeRuntime({
+            botId,
+            status: "RUNNING",
+            reason: null,
+            openOrders: 0,
+            openOrdersMm: 0,
+            openOrdersVol: 0,
+            lastVolClientOrderId: null
+          });
+          break;
+        }
+        if (b.status === "PAUSED") {
+          sm.set("PAUSED", "Paused from UI/API");
+          await writeRuntime({
+            botId,
+            status: "PAUSED",
+            reason: sm.getReason(),
+            openOrders: 0,
+            openOrdersMm: 0,
+            openOrdersVol: 0,
+            lastVolClientOrderId: null
+          });
+          break;
+        }
+      }
     }
     if (botRow.status === "PAUSED") {
       await exchange.cancelAll(symbol);
@@ -303,6 +334,12 @@ export async function runLoop(params: {
           tradedNotionalToday: volState.tradedNotional
         });
 
+        await alert(
+          "warn",
+          `[RISK] Bot ${botId} triggered`,
+          `reason=${decision.reason}\nsymbol=${symbol}\nmid=${mid.mid}\nopenOrders=${open.length}`
+        );
+
         break;
       }
 
@@ -335,6 +372,19 @@ export async function runLoop(params: {
             log.warn({ err: String(e), volOrder }, "volume trade failed");
           }
         }
+      }
+
+      if (
+        botRow.volEnabled &&
+        !volState.dailyAlertSent &&
+        volState.tradedNotional >= vol.dailyNotionalUsdt
+      ) {
+        volState.dailyAlertSent = true;
+        await alert(
+          "info",
+          `[VOLUME] Daily target reached`,
+          `bot=${botId}\nsymbol=${symbol}\nnotional=${volState.tradedNotional}`
+        );
       }
 
       await writeRuntime({
@@ -371,6 +421,12 @@ export async function runLoop(params: {
         openOrdersVol: 0,
         lastVolClientOrderId: null
       });
+
+      await alert(
+        "error",
+        `[ERROR] Bot ${botId} crashed`,
+        `symbol=${symbol}\nerr=${String(e)}`
+      );
       break;
     }
   }

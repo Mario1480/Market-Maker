@@ -5,11 +5,22 @@ type Bot = { id: string; name: string; symbol: string; exchange: string; status:
 
 export default async function Page() {
   const bots = await apiGet<Bot[]>("/bots");
+  const runtimes = await Promise.all(
+    bots.map((b) =>
+      apiGet<any>(`/bots/${b.id}/runtime`).catch(() => null)
+    )
+  );
   const total = bots.length;
   const running = bots.filter((b) => b.status === "RUNNING").length;
   const paused = bots.filter((b) => b.status === "PAUSED").length;
   const stopped = bots.filter((b) => b.status === "STOPPED").length;
   const errored = bots.filter((b) => b.status === "ERROR").length;
+  const now = Date.now();
+  const runnerOnline = runtimes.some((rt) => {
+    const updated = rt?.updatedAt ? new Date(rt.updatedAt).getTime() : NaN;
+    return Number.isFinite(updated) && now - updated <= 15_000;
+  });
+  const runnerOffline = bots.length > 0 && !runnerOnline;
 
   return (
     <div>
@@ -19,7 +30,7 @@ export default async function Page() {
           <div style={{ fontSize: 13, color: "var(--muted)" }}>Active bots and live status overview.</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Link href="/settings/setup" className="btn btnPrimary">Create bot</Link>
+          <Link href="/bots/new" className="btn btnPrimary">New Bot</Link>
           <Link href="/settings" className="btn">Settings</Link>
         </div>
       </div>
@@ -44,6 +55,9 @@ export default async function Page() {
         <div className="card statCard">
           <div className="statLabel">Errors</div>
           <div className="statValue">{errored}</div>
+          {runnerOffline ? (
+            <div className="statNote statNoteDanger">Runner offline</div>
+          ) : null}
         </div>
       </div>
 
@@ -54,7 +68,7 @@ export default async function Page() {
             <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>
               Create your first bot to start market making.
             </div>
-            <Link href="/settings/setup" className="btn btnPrimary">Create bot</Link>
+            <Link href="/bots/new" className="btn btnPrimary">New Bot</Link>
           </div>
         ) : (
           bots.map((b) => (

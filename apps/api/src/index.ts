@@ -10,7 +10,6 @@ app.use(cors());
 app.use(express.json());
 
 const BotCreate = z.object({
-  id: z.string(),
   name: z.string(),
   symbol: z.string(),
   exchange: z.string()
@@ -52,7 +51,52 @@ const CexConfig = z.object({
   apiMemo: z.string().optional()
 });
 
+const AlertConfig = z.object({
+  telegramBotToken: z.string().optional(),
+  telegramChatId: z.string().optional()
+});
+
+async function sendTelegramAlert(text: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return false;
+
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true
+    })
+  });
+  return true;
+}
+
 app.get("/health", (_req, res) => res.json({ ok: true }));
+
+app.post("/alerts/test", async (_req, res) => {
+  let ok = await sendTelegramAlert(`Test alert ✅ ${new Date().toLocaleString()}`);
+  if (!ok) {
+    const cfg = await prisma.alertConfig.findUnique({ where: { key: "default" } });
+    if (cfg?.telegramBotToken && cfg?.telegramChatId) {
+      const url = `https://api.telegram.org/bot${cfg.telegramBotToken}/sendMessage`;
+      await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: cfg.telegramChatId,
+          text: `Test alert ✅ ${new Date().toLocaleString()}`,
+          disable_web_page_preview: true
+        })
+      });
+      ok = true;
+    }
+  }
+  if (!ok) return res.status(400).json({ error: "telegram_not_configured" });
+  res.json({ ok: true });
+});
 
 app.get("/bots", async (_req, res) => {
   const bots = await prisma.bot.findMany({ orderBy: { createdAt: "desc" } });
@@ -73,6 +117,70 @@ app.get("/bots/:id/runtime", async (req, res) => {
   res.json(rt ?? null);
 });
 
+app.get("/exchanges/:exchange/symbols", async (req, res) => {
+  const exchange = req.params.exchange.toLowerCase();
+  if (exchange !== "bitmart") {
+    return res.status(400).json({ error: "unsupported_exchange" });
+  }
+
+  const baseUrl = process.env.BITMART_BASE_URL || "https://api-cloud.bitmart.com";
+  const url = new URL("/spot/v1/symbols", baseUrl);
+
+  const resp = await fetch(url, { method: "GET" });
+  const json = await resp.json().catch(() => ({}));
+
+  if (!resp.ok || (json?.code && json.code !== 1000)) {
+    const msg = json?.msg || json?.message || "symbols fetch failed";
+    return res.status(400).json({ error: msg, details: json });
+  }
+
+  const symbols = Array.isArray(json?.data?.symbols)
+    ? json.data.symbols
+    : Array.isArray(json?.data)
+      ? json.data
+      : [];
+
+  const mapped = symbols
+    .map((s: any) => {
+      if (typeof s === "string") {
+        const parts = s.split(/[_/-]/);
+        const base = parts[0];
+        const quote = parts[1];
+        return { symbol: s, base, quote };
+      }
+
+      const rawSymbol =
+        s?.symbol ||
+        s?.symbol_id ||
+        s?.symbolId ||
+        s?.trade_symbol ||
+        s?.trading_pair;
+      const symbol = rawSymbol ? String(rawSymbol) : "";
+      let base = s?.base_currency || s?.baseCurrency || s?.base || s?.baseToken;
+      let quote = s?.quote_currency || s?.quoteCurrency || s?.quote || s?.quoteToken;
+
+      if ((!base || !quote) && symbol) {
+        const parts = symbol.split(/[_/-]/);
+        if (parts.length >= 2) {
+          base = base || parts[0];
+          quote = quote || parts[1];
+        }
+      }
+
+      if (!symbol) return null;
+      return { symbol, base: base ? String(base) : undefined, quote: quote ? String(quote) : undefined };
+    })
+    .filter(Boolean);
+
+  if (mapped.length === 0) {
+    return res.status(502).json({ error: "symbols_unavailable", details: json });
+  }
+
+  const unique = Array.from(new Map(mapped.map((s: any) => [s.symbol, s])).values());
+  const usdtOnly = unique.filter((s: any) => String(s.quote || "").toUpperCase() === "USDT");
+  res.json(usdtOnly.length > 0 ? usdtOnly : unique);
+});
+
 app.get("/settings/cex/:exchange", async (req, res) => {
   const exchange = req.params.exchange;
   const cfg = await prisma.cexConfig.findUnique({ where: { exchange } });
@@ -84,6 +192,11 @@ app.get("/settings/cex", async (_req, res) => {
   res.json(items);
 });
 
+app.get("/settings/alerts", async (_req, res) => {
+  const cfg = await prisma.alertConfig.findUnique({ where: { key: "default" } });
+  res.json(cfg ?? { telegramBotToken: null, telegramChatId: null });
+});
+
 app.delete("/settings/cex/:exchange", async (req, res) => {
   const exchange = req.params.exchange;
   await prisma.cexConfig.delete({ where: { exchange } });
@@ -92,10 +205,11 @@ app.delete("/settings/cex/:exchange", async (req, res) => {
 
 app.post("/bots", async (req, res) => {
   const data = BotCreate.parse(req.body);
+  const id = crypto.randomUUID();
 
   const bot = await prisma.bot.create({
     data: {
-      id: data.id,
+      id,
       name: data.name,
       symbol: data.symbol,
       exchange: data.exchange,
@@ -134,6 +248,19 @@ app.post("/bots", async (req, res) => {
           maxDailyLoss: 200
         }
       }
+    }
+  });
+
+  await prisma.botRuntime.upsert({
+    where: { botId: bot.id },
+    create: {
+      botId: bot.id,
+      status: "STOPPED",
+      reason: "Created"
+    },
+    update: {
+      status: "STOPPED",
+      reason: "Created"
     }
   });
 
@@ -205,6 +332,23 @@ app.put("/settings/cex", async (req, res) => {
       apiKey: data.apiKey,
       apiSecret: data.apiSecret,
       apiMemo: data.apiMemo
+    }
+  });
+  res.json(cfg);
+});
+
+app.put("/settings/alerts", async (req, res) => {
+  const data = AlertConfig.parse(req.body);
+  const cfg = await prisma.alertConfig.upsert({
+    where: { key: "default" },
+    update: {
+      telegramBotToken: data.telegramBotToken ?? null,
+      telegramChatId: data.telegramChatId ?? null
+    },
+    create: {
+      key: "default",
+      telegramBotToken: data.telegramBotToken ?? null,
+      telegramChatId: data.telegramChatId ?? null
     }
   });
   res.json(cfg);

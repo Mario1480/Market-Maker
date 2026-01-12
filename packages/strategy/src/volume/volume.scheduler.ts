@@ -6,6 +6,7 @@ export interface VolumeState {
   tradedNotional: number;  // USDT
   lastActionMs: number;
   pendingClientOrderId?: string;
+  dailyAlertSent?: boolean;
 }
 
 function passivePrice(mid: number, side: "buy" | "sell"): number {
@@ -25,6 +26,7 @@ export class VolumeScheduler {
     if (state.dayKey !== dayKey) {
       state.dayKey = dayKey;
       state.tradedNotional = 0;
+      state.dailyAlertSent = false;
     }
   }
 
