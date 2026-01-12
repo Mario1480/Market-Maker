@@ -1,0 +1,18 @@
+{
+  "name": "@mm/pricing",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@mm/core": "0.0.1",
+    "@mm/exchange": "0.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
