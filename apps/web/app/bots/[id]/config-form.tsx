@@ -7,18 +7,23 @@ type ConfigFormProps = {
   onMmChange: (next: any) => void;
   onVolChange: (next: any) => void;
   onRiskChange: (next: any) => void;
+  baseSymbol?: string;
 };
 
-export function ConfigForm({ mm, vol, risk, onMmChange, onVolChange, onRiskChange }: ConfigFormProps) {
+export function ConfigForm({ mm, vol, risk, onMmChange, onVolChange, onRiskChange, baseSymbol }: ConfigFormProps) {
+  const baseLabel = baseSymbol ? `Max Budget (${baseSymbol})` : "Max Budget (Token)";
   return (
     <>
-      <Section title="Market Making">
+      <AccordionSection
+        title="Market Making"
+        defaultOpen
+      >
         <Field label="Spread (%)" hint="Best bid/ask spread around mid" value={mm.spreadPct} onChange={(v) => onMmChange({ ...mm, spreadPct: toNumber(v, mm.spreadPct) })} />
         <Field label="Max Spread (%)" hint="Spread between the farthest bid and ask prices" value={mm.maxSpreadPct} onChange={(v) => onMmChange({ ...mm, maxSpreadPct: toNumber(v, mm.maxSpreadPct) })} />
         <Field label="Asks count" hint="Sell levels above mid" value={mm.levelsUp} onChange={(v) => onMmChange({ ...mm, levelsUp: toNumber(v, mm.levelsUp) })} />
         <Field label="Bids count" hint="Buy levels below mid" value={mm.levelsDown} onChange={(v) => onMmChange({ ...mm, levelsDown: toNumber(v, mm.levelsDown) })} />
         <Field label="Max Budget (USDT)" hint="Total max budget for buy side" value={mm.budgetQuoteUsdt} onChange={(v) => onMmChange({ ...mm, budgetQuoteUsdt: toNumber(v, mm.budgetQuoteUsdt) })} />
-        <Field label="Max Budget (Token)" hint="Total max budget for sell side" value={mm.budgetBaseToken} onChange={(v) => onMmChange({ ...mm, budgetBaseToken: toNumber(v, mm.budgetBaseToken) })} />
+        <Field label={baseLabel} hint="Total max budget for sell side" value={mm.budgetBaseToken} onChange={(v) => onMmChange({ ...mm, budgetBaseToken: toNumber(v, mm.budgetBaseToken) })} />
         <SelectField
           label="Order distribution"
           hint="How size is distributed across levels"
@@ -33,9 +38,11 @@ export function ConfigForm({ mm, vol, risk, onMmChange, onVolChange, onRiskChang
         <Field label="Jitter (%)" hint="Randomize prices slightly" value={mm.jitterPct} onChange={(v) => onMmChange({ ...mm, jitterPct: toNumber(v, mm.jitterPct) })} />
         <Field label="Skew Factor" hint="Inventory based price shift" value={mm.skewFactor} onChange={(v) => onMmChange({ ...mm, skewFactor: toNumber(v, mm.skewFactor) })} />
         <Field label="Max Skew" hint="Clamp for inventory skew" value={mm.maxSkew} onChange={(v) => onMmChange({ ...mm, maxSkew: toNumber(v, mm.maxSkew) })} />
-      </Section>
+      </AccordionSection>
 
-      <Section title="Volume Bot">
+      <AccordionSection
+        title="Volume Bot"
+      >
         <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 8 }}>
           Passive = post-only around mid. Mixed may place occasional market orders. Runs 24/7.
         </div>
@@ -52,24 +59,26 @@ export function ConfigForm({ mm, vol, risk, onMmChange, onVolChange, onRiskChang
           ]}
           onChange={(v) => onVolChange({ ...vol, mode: v })}
         />
-      </Section>
+      </AccordionSection>
 
-      <Section title="Risk">
+      <AccordionSection
+        title="Risk"
+      >
         <Field label="Min Balance (USDT)" hint="Stop if balance drops below (0 disables)" value={risk.minUsdt} onChange={(v) => onRiskChange({ ...risk, minUsdt: toNumber(v, risk.minUsdt) })} />
         <Field label="Max Deviation (%)" hint="Pause on large price drift (0 disables)" value={risk.maxDeviationPct} onChange={(v) => onRiskChange({ ...risk, maxDeviationPct: toNumber(v, risk.maxDeviationPct) })} />
         <Field label="Max Open Orders" hint="Pause if open orders exceed (0 disables)" value={risk.maxOpenOrders} onChange={(v) => onRiskChange({ ...risk, maxOpenOrders: toNumber(v, risk.maxOpenOrders) })} />
         <Field label="Max Daily Loss (USDT)" hint="Stop if loss exceeds (0 disables)" value={risk.maxDailyLoss} onChange={(v) => onRiskChange({ ...risk, maxDailyLoss: toNumber(v, risk.maxDailyLoss) })} />
-      </Section>
+      </AccordionSection>
     </>
   );
 }
 
-function Section(props: { title: string; children: React.ReactNode }) {
+function AccordionSection(props: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   return (
-    <section className="card" style={{ padding: 12 }}>
-      <h3 style={{ marginTop: 0 }}>{props.title}</h3>
-      {props.children}
-    </section>
+    <details className="card" style={{ padding: 12, marginBottom: 12 }} open={props.defaultOpen}>
+      <summary style={{ cursor: "pointer", fontWeight: 700, marginBottom: 10 }}>{props.title}</summary>
+      <div>{props.children}</div>
+    </details>
   );
 }
 

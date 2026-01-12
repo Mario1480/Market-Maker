@@ -66,6 +66,77 @@ a { color: inherit; }
   padding-top: 24px;
 }
 
+.dashboardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.statCard {
+  padding: 14px 16px;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.statValue {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.botGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.botCard {
+  padding: 14px 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.botCard:hover {
+  transform: translateY(-2px);
+  border-color: var(--brand);
+}
+
+.botCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.botName {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.botMeta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.botCta {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--brand);
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -295,6 +366,10 @@ a { color: inherit; }
 .badgeWarn {
   border-color: #f59e0b;
   color: #fde68a;
+}
+.badgeDanger {
+  border-color: #ef4444;
+  color: #fecaca;
 }
 .badgeDot {
   width: 8px;

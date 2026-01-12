@@ -180,8 +180,9 @@ export default function BotPage() {
             marginBottom: 12,
             padding: "10px 12px",
             borderRadius: 8,
-            border: toast.type === "error" ? "1px solid #f5b5b5" : "1px solid #b7e1c1",
-            background: toast.type === "error" ? "#fff5f5" : "#f4fff7",
+            border: toast.type === "error" ? "1px solid #ef4444" : "1px solid var(--brand)",
+            background: toast.type === "error" ? "rgba(239,68,68,0.12)" : "rgba(20,129,192,0.16)",
+            color: "#e8eef7",
             fontSize: 13
           }}
         >
@@ -218,77 +219,95 @@ export default function BotPage() {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8, margin: "12px 0", flexWrap: "wrap" }}>
-        <button
-          onClick={start}
-          disabled={saving === "saving..."}
-          className={`btn btnStart ${saving === "saving..." ? "btnDisabled" : ""}`}
-        >
-          Start
-        </button>
-        <button
-          onClick={pause}
-          disabled={saving === "saving..."}
-          className={`btn btnPause ${saving === "saving..." ? "btnDisabled" : ""}`}
-        >
-          Pause
-        </button>
-        <button
-          onClick={stop}
-          disabled={saving === "saving..."}
-          className={`btn btnStop ${saving === "saving..." ? "btnDisabled" : ""}`}
-        >
-          Stop
-        </button>
-        <button
-          onClick={save}
-          disabled={!canSave}
-          className={`btn btnPrimary ${!canSave ? "btnDisabled" : ""}`}
-          style={{ marginLeft: 12 }}
-        >
-          {dirty ? "Save Config" : "Saved"}
-        </button>
-        <span style={{ alignSelf: "center", fontSize: 12 }}>{saving}</span>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "12px 0" }}>
+        <div className="card" style={{ padding: 12 }}>
+        <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 2 }}>Runner controls</div>
+        <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 6 }}>
+          Starts, pauses, or stops the main trading loop for this bot.
+        </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              onClick={start}
+              disabled={saving === "saving..."}
+              className={`btn btnStart ${saving === "saving..." ? "btnDisabled" : ""}`}
+            >
+              Start
+            </button>
+            <button
+              onClick={pause}
+              disabled={saving === "saving..."}
+              className={`btn btnPause ${saving === "saving..." ? "btnDisabled" : ""}`}
+            >
+              Pause
+            </button>
+            <button
+              onClick={stop}
+              disabled={saving === "saving..."}
+              className={`btn btnStop ${saving === "saving..." ? "btnDisabled" : ""}`}
+            >
+              Stop
+            </button>
+            <button
+              onClick={save}
+              disabled={!canSave}
+              className={`btn btnPrimary ${!canSave ? "btnDisabled" : ""}`}
+            >
+              {dirty ? "Save Config" : "Saved"}
+            </button>
+            <span style={{ alignSelf: "center", fontSize: 12 }}>{saving}</span>
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 12 }}>
+          <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Strategy controls (MM and Volume run independently)</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, opacity: 0.8 }}>Market Making</span>
+              <button
+                onClick={startMm}
+                disabled={toggling === "mm" || bot.mmEnabled === true}
+                className={`btn btnStart ${toggling === "mm" || bot.mmEnabled ? "btnDisabled" : ""}`}
+                title="Start market making only (volume stays as is)"
+              >
+                Start MM
+              </button>
+              <button
+                onClick={stopMm}
+                disabled={toggling === "mm" || bot.mmEnabled === false}
+                className={`btn btnStop ${toggling === "mm" || !bot.mmEnabled ? "btnDisabled" : ""}`}
+                title="Stop market making only (volume stays as is)"
+              >
+                Stop MM
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, opacity: 0.8 }}>Volume Bot</span>
+              <button
+                onClick={startVol}
+                disabled={toggling === "vol" || bot.volEnabled === true}
+                className={`btn btnStart ${toggling === "vol" || bot.volEnabled ? "btnDisabled" : ""}`}
+                title="Start volume bot only (MM stays as is)"
+              >
+                Start Volume
+              </button>
+              <button
+                onClick={stopVol}
+                disabled={toggling === "vol" || bot.volEnabled === false}
+                className={`btn btnStop ${toggling === "vol" || !bot.volEnabled ? "btnDisabled" : ""}`}
+                title="Stop volume bot only (MM stays as is)"
+              >
+                Stop Volume
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
-        <span style={{ fontSize: 12, opacity: 0.8 }}>Market Making</span>
-        <button
-          onClick={startMm}
-          disabled={toggling === "mm" || bot.mmEnabled === true}
-          className={`btn btnStart ${toggling === "mm" || bot.mmEnabled ? "btnDisabled" : ""}`}
-          title="Start market making only (volume stays as is)"
-        >
-          Start MM
-        </button>
-        <button
-          onClick={stopMm}
-          disabled={toggling === "mm" || bot.mmEnabled === false}
-          className={`btn btnStop ${toggling === "mm" || !bot.mmEnabled ? "btnDisabled" : ""}`}
-          title="Stop market making only (volume stays as is)"
-        >
-          Stop MM
-        </button>
-        <span style={{ fontSize: 12, opacity: 0.8, marginLeft: 8 }}>Volume Bot</span>
-        <button
-          onClick={startVol}
-          disabled={toggling === "vol" || bot.volEnabled === true}
-          className={`btn btnStart ${toggling === "vol" || bot.volEnabled ? "btnDisabled" : ""}`}
-          title="Start volume bot only (MM stays as is)"
-        >
-          Start Volume
-        </button>
-        <button
-          onClick={stopVol}
-          disabled={toggling === "vol" || bot.volEnabled === false}
-          className={`btn btnStop ${toggling === "vol" || !bot.volEnabled ? "btnDisabled" : ""}`}
-          title="Stop volume bot only (MM stays as is)"
-        >
-          Stop Volume
-        </button>
+      <div style={{ marginBottom: 16 }}>
+        <LiveView runtime={rt} baseSymbol={bot?.symbol?.split("_")[0]} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div>
         <ConfigForm
           mm={mm}
           vol={vol}
@@ -296,8 +315,8 @@ export default function BotPage() {
           onMmChange={setMm}
           onVolChange={setVol}
           onRiskChange={setRisk}
+          baseSymbol={bot?.symbol?.split("_")[0]}
         />
-        <LiveView runtime={rt} />
       </div>
     </div>
   );

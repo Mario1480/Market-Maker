@@ -1,26 +1,34 @@
 type LiveViewProps = {
   runtime: any;
+  baseSymbol?: string;
 };
 
-export function LiveView({ runtime }: LiveViewProps) {
+export function LiveView({ runtime, baseSymbol }: LiveViewProps) {
+  const baseLabel = baseSymbol ? `Free ${baseSymbol}` : "Free base";
+  const hint = buildHint(runtime);
   return (
     <Section title="Live Snapshot">
       {!runtime ? (
         <div style={{ fontSize: 12, opacity: 0.8 }}>No runtime yet (runner not started?)</div>
       ) : (
         <>
+          {hint ? (
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>
+              {hint}
+            </div>
+          ) : null}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <Kv k="mid" v={runtime.mid} />
-            <Kv k="bid" v={runtime.bid} />
-            <Kv k="ask" v={runtime.ask} />
-            <Kv k="openOrders" v={runtime.openOrders} />
-            <Kv k="openOrdersMm" v={runtime.openOrdersMm} />
-            <Kv k="openOrdersVol" v={runtime.openOrdersVol} />
-            <Kv k="lastVolClientOrderId" v={runtime.lastVolClientOrderId} />
-            <Kv k="freeUsdt" v={runtime.freeUsdt} />
-            <Kv k="freeBase" v={runtime.freeBase} />
-            <Kv k="tradedNotionalToday" v={runtime.tradedNotionalToday} />
-            <Kv k="updatedAt" v={runtime.updatedAt} />
+            <Kv k="Mid price" v={runtime.mid} />
+            <Kv k="Best bid" v={runtime.bid} />
+            <Kv k="Best ask" v={runtime.ask} />
+            <Kv k="Open orders (total)" v={runtime.openOrders} />
+            <Kv k="Open orders (MM)" v={runtime.openOrdersMm} />
+            <Kv k="Open orders (Volume)" v={runtime.openOrdersVol} />
+            <Kv k="Last volume order" v={runtime.lastVolClientOrderId} />
+            <Kv k="Free USDT" v={runtime.freeUsdt} />
+            <Kv k={baseLabel} v={runtime.freeBase} />
+            <Kv k="Traded notional today" v={runtime.tradedNotionalToday} />
+            <Kv k="Updated at" v={formatUpdated(runtime.updatedAt)} />
           </div>
 
           <details style={{ marginTop: 10 }}>
@@ -51,4 +59,30 @@ function Kv(props: { k: string; v: any }) {
       </div>
     </div>
   );
+}
+
+function formatUpdated(value: any) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString();
+}
+
+function buildHint(runtime: any): string | null {
+  if (!runtime) return "Runner not started.";
+
+  if (runtime.status === "PAUSED" && runtime.reason) {
+    return `Paused: ${runtime.reason}`;
+  }
+  if (runtime.status === "STOPPED" && runtime.reason) {
+    return `Stopped: ${runtime.reason}`;
+  }
+  if (runtime.status === "ERROR" && runtime.reason) {
+    return `Error: ${runtime.reason}`;
+  }
+
+  if (!runtime.mid) {
+    return "No market data yet. Check if the runner is running and the exchange provides bid/ask.";
+  }
+  return null;
 }
