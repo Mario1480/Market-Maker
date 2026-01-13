@@ -489,7 +489,7 @@ app.post("/bots/:id/mm/start", async (req, res) => {
   const bot = await prisma.bot.findUnique({ where: { id: botId } });
   if (!bot) return res.status(404).json({ error: "bot_not_found" });
   await prisma.bot.update({ where: { id: botId }, data: { mmEnabled: true } });
-  await sendTelegramWithFallback(`✅ MM started\nbot=${bot.name}`);
+  await sendTelegramWithFallback(`✅ MM started\n${bot.name} (${bot.symbol})`);
   res.json({ ok: true });
 });
 
@@ -498,7 +498,7 @@ app.post("/bots/:id/mm/stop", async (req, res) => {
   const bot = await prisma.bot.findUnique({ where: { id: botId } });
   if (!bot) return res.status(404).json({ error: "bot_not_found" });
   await prisma.bot.update({ where: { id: botId }, data: { mmEnabled: false } });
-  await sendTelegramWithFallback(`🛑 MM stopped\nbot=${bot.name}`);
+  await sendTelegramWithFallback(`🛑 MM stopped\n${bot.name} (${bot.symbol})`);
   res.json({ ok: true });
 });
 
@@ -507,7 +507,7 @@ app.post("/bots/:id/vol/start", async (req, res) => {
   const bot = await prisma.bot.findUnique({ where: { id: botId } });
   if (!bot) return res.status(404).json({ error: "bot_not_found" });
   await prisma.bot.update({ where: { id: botId }, data: { volEnabled: true } });
-  await sendTelegramWithFallback(`✅ Volume bot started\nbot=${bot.name}`);
+  await sendTelegramWithFallback(`✅ Volume bot started\n${bot.name} (${bot.symbol})`);
   res.json({ ok: true });
 });
 
@@ -516,7 +516,7 @@ app.post("/bots/:id/vol/stop", async (req, res) => {
   const bot = await prisma.bot.findUnique({ where: { id: botId } });
   if (!bot) return res.status(404).json({ error: "bot_not_found" });
   await prisma.bot.update({ where: { id: botId }, data: { volEnabled: false } });
-  await sendTelegramWithFallback(`🛑 Volume bot stopped\nbot=${bot.name}`);
+  await sendTelegramWithFallback(`🛑 Volume bot stopped\n${bot.name} (${bot.symbol})`);
   res.json({ ok: true });
 });
 
@@ -621,7 +621,7 @@ app.post("/bots/:id/start", async (req, res) => {
     message: "Start command received"
   });
 
-  await sendTelegramWithFallback(`✅ Bot started\nbot=${bot.name}`);
+  await sendTelegramWithFallback(`✅ Bot started\n${bot.name} (${bot.symbol})`);
 
   res.json({ ok: true });
 });
@@ -691,7 +691,7 @@ app.post("/bots/:id/stop", async (req, res) => {
     message: "Stop command received"
   });
 
-  await sendTelegramWithFallback(`🛑 Bot stopped\nbot=${bot.name}`);
+  await sendTelegramWithFallback(`🛑 Bot stopped\n${bot.name} (${bot.symbol})`);
 
   res.json({ ok: true });
 });

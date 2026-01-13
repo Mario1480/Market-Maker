@@ -331,7 +331,7 @@ export default function BotOverviewPage() {
             <div style={{ fontSize: 12, color: "var(--muted)" }}>No alerts yet.</div>
           ) : (
             <div style={{ display: "grid", gap: 8 }}>
-              {alerts.map((a) => (
+              {alerts.slice(0, 10).map((a) => (
                 <div key={a.id} className="card" style={{ padding: 8 }}>
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>{formatUpdated(a.createdAt)}</div>
                   <div style={{ fontWeight: 700 }}>{a.title}</div>

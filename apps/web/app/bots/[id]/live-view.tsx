@@ -10,7 +10,7 @@ export function LiveView({ runtime, baseSymbol }: LiveViewProps) {
   const offline = !runtime || staleness.stale;
   return (
     <Section
-      title="Live Snapshot"
+      title="Life Runtime"
       right={
         offline ? (
           <span
@@ -61,7 +61,7 @@ export function LiveView({ runtime, baseSymbol }: LiveViewProps) {
 
 function Section(props: { title: string; right?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="card" style={{ padding: 12 }}>
+    <section className="card" style={{ padding: 12, marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <h3 style={{ margin: 0 }}>{props.title}</h3>
         {props.right}

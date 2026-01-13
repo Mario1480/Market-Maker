@@ -167,3 +167,17 @@ export async function writeAlert(params: {
     }
   });
 }
+
+export async function updateBotFlags(params: {
+  botId: string;
+  status?: string;
+  mmEnabled?: boolean;
+  volEnabled?: boolean;
+}) {
+  const data: Record<string, any> = {};
+  if (params.status !== undefined) data.status = params.status;
+  if (params.mmEnabled !== undefined) data.mmEnabled = params.mmEnabled;
+  if (params.volEnabled !== undefined) data.volEnabled = params.volEnabled;
+  if (Object.keys(data).length === 0) return;
+  await prisma.bot.update({ where: { id: params.botId }, data });
+}

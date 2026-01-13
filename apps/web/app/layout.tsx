@@ -10,7 +10,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="appHeader">
           <div className="container appHeaderInner">
             <Link href="/" className="appLogo" aria-label="Market Maker">
-              uLiquid
+              <img src="/images/logo.png" alt="uLiquid logo" className="appLogoMark" />
+              <span className="appLogoText">uLiquid</span>
             </Link>
             <nav className="appNav">
               <Link href="/" className="btn">Dashboard</Link>

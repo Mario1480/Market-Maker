@@ -8,7 +8,7 @@ import { BotStateMachine } from "./state-machine.js";
 import { OrderManager } from "./order-manager.js";
 import { inventoryRatio } from "./inventory.js";
 import { log } from "./logger.js";
-import { loadBotAndConfigs, writeAlert, writeRuntime } from "./db.js";
+import { loadBotAndConfigs, updateBotFlags, writeAlert, writeRuntime } from "./db.js";
 import { alert } from "./alerts.js";
 
 function normalizeAsset(a: string): string {
@@ -37,6 +37,7 @@ export async function runLoop(params: {
   let mm = params.mm;
   let vol = params.vol;
   let risk = params.risk;
+  let botName = params.botId;
 
   const priceSource = new SlavePriceSource(exchange);
   let volSched = new VolumeScheduler(vol);
@@ -64,6 +65,7 @@ export async function runLoop(params: {
   while (true) {
     // Bot status from DB (start/stop/pause)
     const botRow = (await loadBotAndConfigs(botId)).bot;
+    botName = botRow.name || botName;
     if (botRow.status === "STOPPED") {
       await exchange.cancelAll(symbol);
       sm.set("STOPPED", "Stopped from UI/API");
@@ -321,13 +323,18 @@ export async function runLoop(params: {
         log.warn({ decision }, "risk triggered");
         await exchange.cancelAll(symbol);
 
-        const nextStatus = decision.action === "STOP" ? "STOPPED" : decision.action === "PAUSE" ? "PAUSED" : "ERROR";
-        sm.set(nextStatus as any, decision.reason);
+        const nextStatus = "RUNNING";
+        sm.set(nextStatus as any, `Risk triggered: ${decision.reason}`);
+
+        const shouldDisable = botRow.mmEnabled || botRow.volEnabled;
+        if (shouldDisable) {
+          await updateBotFlags({ botId, mmEnabled: false, volEnabled: false });
+        }
 
         await writeRuntime({
           botId,
           status: sm.getStatus(),
-          reason: sm.getReason(),
+          reason: `Risk triggered: ${decision.reason}. Strategies disabled.`,
           mid: mid.mid,
           bid: mid.bid ?? null,
           ask: mid.ask ?? null,
@@ -340,20 +347,25 @@ export async function runLoop(params: {
           tradedNotionalToday: volState.tradedNotional
         });
 
-        await writeAlert({
-          botId,
-          level: "warn",
-          title: "Risk triggered",
-          message: `reason=${decision.reason} symbol=${symbol} mid=${mid.mid} openOrders=${open.length}`
-        });
+        if (shouldDisable) {
+          await writeAlert({
+            botId,
+            level: "warn",
+            title: "Risk triggered",
+            message: `reason=${decision.reason} symbol=${symbol} mid=${mid.mid} openOrders=${open.length}`
+          });
 
-        await alert(
-          "warn",
-          `[RISK] Bot ${botId} triggered`,
-          `reason=${decision.reason}\nsymbol=${symbol}\nmid=${mid.mid}\nopenOrders=${open.length}`
-        );
+          await alert(
+            "warn",
+            `[RISK] ${botName} (${symbol})`,
+            `reason=${decision.reason}\nmid=${mid.mid}\nopenOrders=${open.length}`
+          );
+        }
 
-        break;
+        const elapsed = Date.now() - t0;
+        const sleep = Math.max(0, tickMs - elapsed);
+        await new Promise((r) => setTimeout(r, sleep));
+        continue;
       }
 
       // MM sync (only manage mm-* orders so we don't cancel volume orders)
@@ -376,6 +388,10 @@ export async function runLoop(params: {
 
       // Volume bot (PASSIVE-first: post-only limit near mid; MIXED may use rare market)
       if (botRow.volEnabled) {
+        const maxOpen = risk.maxOpenOrders ?? 0;
+        if (maxOpen > 0 && open.length >= maxOpen) {
+          log.info({ openOrders: open.length, maxOpen }, "volume skipped: open order cap reached");
+        } else {
         const volOrder = volSched.maybeCreateTrade(symbol, mid.mid, volState);
         if (volOrder) {
           try {
@@ -384,6 +400,7 @@ export async function runLoop(params: {
           } catch (e) {
             log.warn({ err: String(e), volOrder }, "volume trade failed");
           }
+        }
         }
       }
 
@@ -401,8 +418,8 @@ export async function runLoop(params: {
         });
         await alert(
           "info",
-          `[VOLUME] Daily target reached`,
-          `bot=${botId}\nsymbol=${symbol}\nnotional=${volState.tradedNotional}`
+          `[VOLUME] ${botName} (${symbol})`,
+          `dailyTargetReached notional=${volState.tradedNotional}`
         );
       }
 
@@ -426,11 +443,36 @@ export async function runLoop(params: {
       const sleep = Math.max(0, tickMs - elapsed);
       await new Promise((r) => setTimeout(r, sleep));
     } catch (e) {
-      log.error({ err: String(e) }, "loop error");
+      const errStr = String(e);
+      const isTransient =
+        errStr.includes("fetch failed") ||
+        errStr.includes("ECONNRESET") ||
+        errStr.includes("ENOTFOUND") ||
+        errStr.includes("ETIMEDOUT") ||
+        errStr.includes("ECONNREFUSED");
+
+      if (isTransient) {
+        log.warn({ err: errStr }, "transient loop error");
+        await writeRuntime({
+          botId,
+          status: "RUNNING",
+          reason: `Network error: ${errStr}`,
+          openOrders: null,
+          openOrdersMm: null,
+          openOrdersVol: null,
+          lastVolClientOrderId: null
+        });
+        const elapsed = Date.now() - t0;
+        const sleep = Math.max(0, tickMs - elapsed);
+        await new Promise((r) => setTimeout(r, sleep));
+        continue;
+      }
+
+      log.error({ err: errStr }, "loop error");
       try {
         await exchange.cancelAll(symbol);
       } catch {}
-      sm.set("ERROR", String(e));
+      sm.set("ERROR", errStr);
       await writeRuntime({
         botId,
         status: "ERROR",
@@ -445,13 +487,13 @@ export async function runLoop(params: {
         botId,
         level: "error",
         title: "Runner error",
-        message: `symbol=${symbol} err=${String(e)}`
+        message: `symbol=${symbol} err=${errStr}`
       });
 
       await alert(
         "error",
-        `[ERROR] Bot ${botId} crashed`,
-        `symbol=${symbol}\nerr=${String(e)}`
+        `[ERROR] ${botName} (${symbol})`,
+        `err=${errStr}`
       );
       break;
     }

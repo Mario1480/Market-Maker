@@ -42,98 +42,119 @@ export function ConfigForm({
         title="Market Making"
         defaultOpen
       >
-        <Field
-          label="Spread (%)"
-          hint="Best bid/ask spread around mid"
-          value={spreadPctDisplay}
-          onChange={(v) => onMmChange({ ...mm, spreadPct: fromPercent(v, mm.spreadPct) })}
-        />
-        <Field
-          label="Max Spread (%)"
-          hint="Spread between the farthest bid and ask prices"
-          value={maxSpreadPctDisplay}
-          onChange={(v) => onMmChange({ ...mm, maxSpreadPct: fromPercent(v, mm.maxSpreadPct) })}
-        />
-        <Field
-          label="Asks count"
-          hint="Sell levels above mid (max 30)"
-          value={mm.levelsUp}
-          onChange={(v) => onMmChange({ ...mm, levelsUp: toIntClamp(v, mm.levelsUp, 0, 30) })}
-        />
-        <Field
-          label="Bids count"
-          hint="Buy levels below mid (max 30)"
-          value={mm.levelsDown}
-          onChange={(v) => onMmChange({ ...mm, levelsDown: toIntClamp(v, mm.levelsDown, 0, 30) })}
-        />
-        <Field
-          label="Max Budget (USDT)"
-          hint="Total max budget for buy side (min 100 USDT)"
-          value={mm.budgetQuoteUsdt}
-          onChange={(v) => onMmChange({ ...mm, budgetQuoteUsdt: toMinNumber(v, mm.budgetQuoteUsdt, minQuoteUsdt) })}
-          error={errors?.budgetQuoteUsdt}
-        />
-        <Field
-          label={baseLabel}
-          hint={
-            minBaseToken
-              ? `Total max budget for sell side (min ~${formatFixed(minBaseToken, 0)} ${baseUnit})`
-              : "Total max budget for sell side (min 100 USDT in token value)"
-          }
-          value={mm.budgetBaseToken}
-          onChange={(v) =>
-            onMmChange({
-              ...mm,
-              budgetBaseToken: toMinNumber(v, mm.budgetBaseToken, minBaseToken ?? 0)
-            })
-          }
-          error={errors?.budgetBaseToken}
-        />
-        <Field
-          label="Min order (USDT)"
-          hint="Per-order minimum notional (0 disables)"
-          value={mm.minOrderUsdt ?? 0}
-          onChange={(v) => onMmChange({ ...mm, minOrderUsdt: toNumber(v, mm.minOrderUsdt ?? 0) })}
-        />
-        <Field
-          label="Max order (USDT)"
-          hint="Per-order maximum notional (0 disables)"
-          value={mm.maxOrderUsdt ?? 0}
-          onChange={(v) => onMmChange({ ...mm, maxOrderUsdt: toNumber(v, mm.maxOrderUsdt ?? 0) })}
-        />
-        <SelectField
-          label="Order distribution"
-          hint="How size is distributed across levels"
-          value={mm.distribution}
-          options={[
-            { label: "Linear", value: "LINEAR" },
-            { label: "Valley", value: "VALLEY" },
-            { label: "Random", value: "RANDOM" }
-          ]}
-          onChange={(v) => onMmChange({ ...mm, distribution: v })}
-        />
-        <Field
-          label="Jitter (%)"
-          hint="Randomize prices slightly"
-          value={jitterPctDisplay}
-          onChange={(v) => onMmChange({ ...mm, jitterPct: fromPercent(v, mm.jitterPct) })}
-        />
-        <Field label="Skew Factor" hint="Inventory based price shift" value={mm.skewFactor} onChange={(v) => onMmChange({ ...mm, skewFactor: toNumber(v, mm.skewFactor) })} />
-        <Field label="Max Skew" hint="Clamp for inventory skew" value={mm.maxSkew} onChange={(v) => onMmChange({ ...mm, maxSkew: toNumber(v, mm.maxSkew) })} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <Field
+              label="Spread (%)"
+              hint="Best bid/ask spread around mid"
+              value={spreadPctDisplay}
+              onChange={(v) => onMmChange({ ...mm, spreadPct: fromPercent(v, mm.spreadPct) })}
+            />
+            <Field
+              label="Max Spread (%)"
+              hint="Spread between the farthest bid and ask prices"
+              value={maxSpreadPctDisplay}
+              onChange={(v) => onMmChange({ ...mm, maxSpreadPct: fromPercent(v, mm.maxSpreadPct) })}
+            />
+            <Field
+              label="Asks count"
+              hint="Sell levels above mid (max 30)"
+              value={mm.levelsUp}
+              onChange={(v) => onMmChange({ ...mm, levelsUp: toIntClamp(v, mm.levelsUp, 0, 30) })}
+            />
+            <Field
+              label="Bids count"
+              hint="Buy levels below mid (max 30)"
+              value={mm.levelsDown}
+              onChange={(v) => onMmChange({ ...mm, levelsDown: toIntClamp(v, mm.levelsDown, 0, 30) })}
+            />
+            <SelectField
+              label="Order distribution"
+              hint="How size is distributed across levels"
+              value={mm.distribution}
+              options={[
+                { label: "Linear", value: "LINEAR" },
+                { label: "Valley", value: "VALLEY" },
+                { label: "Random", value: "RANDOM" }
+              ]}
+              onChange={(v) => onMmChange({ ...mm, distribution: v })}
+            />
+            <Field
+              label="Max Budget (USDT)"
+              hint="Total max budget for buy side (min 100 USDT)"
+              value={mm.budgetQuoteUsdt}
+              onChange={(v) => onMmChange({ ...mm, budgetQuoteUsdt: toMinNumber(v, mm.budgetQuoteUsdt, minQuoteUsdt) })}
+              error={errors?.budgetQuoteUsdt}
+            />
+            <Field
+              label={baseLabel}
+              hint={
+                minBaseToken
+                  ? `Total max budget for sell side (min ~${formatFixed(minBaseToken, 0)} ${baseUnit})`
+                  : "Total max budget for sell side (min 100 USDT in token value)"
+              }
+              value={mm.budgetBaseToken}
+              onChange={(v) =>
+                onMmChange({
+                  ...mm,
+                  budgetBaseToken: toMinNumber(v, mm.budgetBaseToken, minBaseToken ?? 0)
+                })
+              }
+              error={errors?.budgetBaseToken}
+            />
+          </div>
+          <div>
+            <Field
+              label="Min order (USDT)"
+              hint="Per-order minimum notional (0 disables)"
+              value={mm.minOrderUsdt ?? 0}
+              onChange={(v) => onMmChange({ ...mm, minOrderUsdt: toNumber(v, mm.minOrderUsdt ?? 0) })}
+            />
+            <Field
+              label="Max order (USDT)"
+              hint="Per-order maximum notional (0 disables)"
+              value={mm.maxOrderUsdt ?? 0}
+              onChange={(v) => onMmChange({ ...mm, maxOrderUsdt: toNumber(v, mm.maxOrderUsdt ?? 0) })}
+            />
+            <Field
+              label="Jitter (%)"
+              hint="Randomize prices slightly"
+              value={jitterPctDisplay}
+              onChange={(v) => onMmChange({ ...mm, jitterPct: fromPercent(v, mm.jitterPct) })}
+            />
+            <Field label="Skew Factor" hint="Inventory based price shift" value={mm.skewFactor} onChange={(v) => onMmChange({ ...mm, skewFactor: toNumber(v, mm.skewFactor) })} />
+            <Field label="Max Skew" hint="Clamp for inventory skew" value={mm.maxSkew} onChange={(v) => onMmChange({ ...mm, maxSkew: toNumber(v, mm.maxSkew) })} />
+          </div>
+        </div>
       </AccordionSection>
 
       <AccordionSection
         title="Volume Bot"
       >
         <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 8 }}>
-          Passive = post-only around mid. Mixed may place occasional market orders. Runs 24/7.
+          Generates small trades over time to reach your daily notional. Runs 24/7.
         </div>
-        <Field label="Daily Notional (USDT)" hint="Target daily volume" value={vol.dailyNotionalUsdt} onChange={(v) => onVolChange({ ...vol, dailyNotionalUsdt: toNumber(v, vol.dailyNotionalUsdt) })} />
-        <Field label="Min Trade (USDT)" hint="Lower bound per trade" value={vol.minTradeUsdt} onChange={(v) => onVolChange({ ...vol, minTradeUsdt: toNumber(v, vol.minTradeUsdt) })} />
-        <Field label="Max Trade (USDT)" hint="Upper bound per trade" value={vol.maxTradeUsdt} onChange={(v) => onVolChange({ ...vol, maxTradeUsdt: toNumber(v, vol.maxTradeUsdt) })} />
+        <Field
+          label="Daily Notional (USDT)"
+          hint="Total target volume per day"
+          value={vol.dailyNotionalUsdt}
+          onChange={(v) => onVolChange({ ...vol, dailyNotionalUsdt: toNumber(v, vol.dailyNotionalUsdt) })}
+        />
+        <Field
+          label="Min Trade (USDT)"
+          hint="Minimum size per trade (smaller trades look more natural)"
+          value={vol.minTradeUsdt}
+          onChange={(v) => onVolChange({ ...vol, minTradeUsdt: toNumber(v, vol.minTradeUsdt) })}
+        />
+        <Field
+          label="Max Trade (USDT)"
+          hint="Maximum size per trade"
+          value={vol.maxTradeUsdt}
+          onChange={(v) => onVolChange({ ...vol, maxTradeUsdt: toNumber(v, vol.maxTradeUsdt) })}
+        />
         <SelectField
           label="Mode"
-          hint="Passive or mixed execution"
+          hint="Passive = post-only near mid. Mixed = mostly passive with occasional market orders."
           value={vol.mode}
           options={[
             { label: "Passive", value: "PASSIVE" },

@@ -43,17 +43,28 @@ a { color: inherit; }
 }
 
 .appLogo {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   font-weight: 800;
   letter-spacing: 0.02em;
-  background: var(--brand);
-  color: #111;
+  color: var(--text);
   text-decoration: none;
+}
+
+.appLogoMark {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: 0 0 18px rgba(20, 129, 192, 0.35);
+}
+
+.appLogoText {
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: 0.02em;
 }
 
 .appNav {
