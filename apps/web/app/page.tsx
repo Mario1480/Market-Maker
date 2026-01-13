@@ -1,15 +1,43 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { apiGet } from "../lib/api";
 
-type Bot = { id: string; name: string; symbol: string; exchange: string; status: string; mmEnabled: boolean; volEnabled: boolean };
+type Bot = {
+  id: string;
+  name: string;
+  symbol: string;
+  exchange: string;
+  status: string;
+  mmEnabled: boolean;
+  volEnabled: boolean;
+};
 
-export default async function Page() {
-  const bots = await apiGet<Bot[]>("/bots");
-  const runtimes = await Promise.all(
-    bots.map((b) =>
-      apiGet<any>(`/bots/${b.id}/runtime`).catch(() => null)
-    )
-  );
+export default function Page() {
+  const [bots, setBots] = useState<Bot[]>([]);
+  const [runtimes, setRuntimes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      setLoading(true);
+      try {
+        const list = await apiGet<Bot[]>("/bots");
+        const rt = await Promise.all(list.map((b) => apiGet<any>(`/bots/${b.id}/runtime`).catch(() => null)));
+        if (!mounted) return;
+        setBots(list);
+        setRuntimes(rt);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
   const total = bots.length;
   const running = bots.filter((b) => b.status === "RUNNING").length;
   const paused = bots.filter((b) => b.status === "PAUSED").length;
@@ -30,31 +58,29 @@ export default async function Page() {
           <div style={{ fontSize: 13, color: "var(--muted)" }}>Active bots and live status overview.</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Link href="/bots/new" className="btn btnPrimary">New Bot</Link>
-          <Link href="/settings" className="btn">Settings</Link>
         </div>
       </div>
 
       <div className="statGrid">
         <div className="card statCard">
           <div className="statLabel">Total bots</div>
-          <div className="statValue">{total}</div>
+          <div className="statValue">{loading ? "…" : total}</div>
         </div>
         <div className="card statCard">
           <div className="statLabel">Running</div>
-          <div className="statValue">{running}</div>
+          <div className="statValue">{loading ? "…" : running}</div>
         </div>
         <div className="card statCard">
           <div className="statLabel">Paused</div>
-          <div className="statValue">{paused}</div>
+          <div className="statValue">{loading ? "…" : paused}</div>
         </div>
         <div className="card statCard">
           <div className="statLabel">Stopped</div>
-          <div className="statValue">{stopped}</div>
+          <div className="statValue">{loading ? "…" : stopped}</div>
         </div>
         <div className="card statCard">
           <div className="statLabel">Errors</div>
-          <div className="statValue">{errored}</div>
+          <div className="statValue">{loading ? "…" : errored}</div>
           {runnerOffline ? (
             <div className="statNote statNoteDanger">Runner offline</div>
           ) : null}

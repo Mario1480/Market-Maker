@@ -31,6 +31,7 @@ async function request<T>(
     method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
+    credentials: "include",
     cache: "no-store"
   });
 

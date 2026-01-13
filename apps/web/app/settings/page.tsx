@@ -30,9 +30,13 @@ export default function SettingsPage() {
           <div style={{ fontWeight: 700, marginBottom: 6 }}>Security</div>
           <div style={{ fontSize: 12, color: "var(--muted)" }}>Access control and keys</div>
         </Link>
+        <Link className="card" href="/settings/users" style={{ padding: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Users</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>Password and access</div>
+        </Link>
         <Link className="card" href="/settings/setup" style={{ padding: 12 }}>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Setup</div>
-          <div style={{ fontSize: 12, color: "var(--muted)" }}>Create default bot and bootstrap</div>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Bot Setup</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>Bot list and setup</div>
         </Link>
         <Link className="card" href="/settings/support" style={{ padding: 12 }}>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>Support & Help</div>

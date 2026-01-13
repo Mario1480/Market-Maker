@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ApiError, apiDelete, apiGet, apiPost } from "../../../lib/api";
+import { ApiError, apiDelete, apiGet } from "../../../lib/api";
 
 type Bot = {
   id: string;
@@ -33,21 +33,6 @@ export default function Setup() {
       setMsg(errMsg(e));
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function create() {
-    setMsg("creating...");
-    try {
-      const bot = await apiPost<{ id: string }>("/bots", {
-        name: "USHARK MM",
-        symbol: "USHARK_USDT",
-        exchange: "bitmart"
-      });
-      setMsg(`created ${bot.id}.`);
-      await loadBots();
-    } catch (e: any) {
-      setMsg(errMsg(e));
     }
   }
 
@@ -82,9 +67,9 @@ export default function Setup() {
       </div>
       <h2>Setup</h2>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <button onClick={create} className="btn btnPrimary">
-          Create default bot (USHARK)
-        </button>
+        <Link href="/bots/new" className="btn btnPrimary">
+          New Bot
+        </Link>
         <button onClick={loadBots} className="btn">
           Refresh list
         </button>

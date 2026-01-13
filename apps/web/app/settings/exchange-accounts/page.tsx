@@ -19,6 +19,9 @@ export default function ExchangeAccountsPage() {
   const [items, setItems] = useState<CexConfig[]>([]);
   const [exchange, setExchange] = useState(DEFAULT_EXCHANGE);
   const [onlyConfigured, setOnlyConfigured] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [unlockPwd, setUnlockPwd] = useState("");
+  const [unlocking, setUnlocking] = useState(false);
   const [form, setForm] = useState<CexConfig>({
     exchange: DEFAULT_EXCHANGE,
     apiKey: "",
@@ -31,6 +34,15 @@ export default function ExchangeAccountsPage() {
   function errMsg(e: any): string {
     if (e instanceof ApiError) return `${e.message} (HTTP ${e.status})`;
     return e?.message ? String(e.message) : String(e);
+  }
+
+  function handleReauthError(e: any) {
+    if (e instanceof ApiError && e.status === 403 && e.payload?.error === "reauth_required") {
+      setUnlocked(false);
+      setError("Session expired. Unlock again to edit keys.");
+      return true;
+    }
+    return false;
   }
 
   async function loadList() {
@@ -58,7 +70,14 @@ export default function ExchangeAccountsPage() {
       setError("");
       try {
         await loadList();
-        await loadSelected(exchange);
+        const reauth = await apiGet<{ ok: boolean }>("/auth/reauth/status");
+        if (reauth?.ok) {
+          setUnlocked(true);
+          await loadSelected(exchange);
+        } else {
+          setUnlocked(false);
+          setForm({ exchange, apiKey: "", apiSecret: "", apiMemo: "" });
+        }
         setStatus("");
       } catch (e) {
         setStatus("");
@@ -68,7 +87,30 @@ export default function ExchangeAccountsPage() {
     load();
   }, [exchange]);
 
+  async function unlock() {
+    setUnlocking(true);
+    setStatus("unlocking...");
+    setError("");
+    try {
+      await apiPost("/auth/reauth", { password: unlockPwd });
+      setUnlocked(true);
+      setUnlockPwd("");
+      await loadSelected(exchange);
+      setStatus("unlocked");
+      setTimeout(() => setStatus(""), 1200);
+    } catch (e) {
+      setStatus("");
+      setError(errMsg(e));
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
   async function save() {
+    if (!unlocked) {
+      setError("Unlock required to edit keys.");
+      return;
+    }
     setStatus("saving...");
     setError("");
     try {
@@ -82,12 +124,18 @@ export default function ExchangeAccountsPage() {
       setStatus("saved");
       setTimeout(() => setStatus(""), 1200);
     } catch (e) {
-      setStatus("");
-      setError(errMsg(e));
+      if (!handleReauthError(e)) {
+        setStatus("");
+        setError(errMsg(e));
+      }
     }
   }
 
   async function verify() {
+    if (!unlocked) {
+      setError("Unlock required to verify keys.");
+      return;
+    }
     setStatus("verifying...");
     setError("");
     try {
@@ -100,12 +148,18 @@ export default function ExchangeAccountsPage() {
       setStatus("verified");
       setTimeout(() => setStatus(""), 1200);
     } catch (e) {
-      setStatus("");
-      setError(errMsg(e));
+      if (!handleReauthError(e)) {
+        setStatus("");
+        setError(errMsg(e));
+      }
     }
   }
 
   async function remove(exchangeId: string) {
+    if (!unlocked) {
+      setError("Unlock required to delete keys.");
+      return;
+    }
     setStatus("removing...");
     setError("");
     try {
@@ -116,8 +170,10 @@ export default function ExchangeAccountsPage() {
       }
       setStatus("");
     } catch (e) {
-      setStatus("");
-      setError(errMsg(e));
+      if (!handleReauthError(e)) {
+        setStatus("");
+        setError(errMsg(e));
+      }
     }
   }
 
@@ -209,6 +265,31 @@ export default function ExchangeAccountsPage() {
         </div>
 
         <div>
+          {!unlocked && (
+            <Section title="Unlock to edit">
+              <Field label="Password">
+                <input
+                  type="password"
+                  value={unlockPwd}
+                  onChange={(e) => setUnlockPwd(e.target.value)}
+                  className="input"
+                  placeholder="Confirm password"
+                />
+              </Field>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button
+                  onClick={unlock}
+                  className="btn btnPrimary"
+                  disabled={!unlockPwd || unlocking}
+                >
+                  Unlock
+                </button>
+                <span style={{ fontSize: 12, opacity: 0.7 }}>
+                  Unlock lasts 10 minutes.
+                </span>
+              </div>
+            </Section>
+          )}
           <Section title="CEX API">
             <Field label="exchange">
               <select
@@ -228,6 +309,7 @@ export default function ExchangeAccountsPage() {
                 value={form.apiKey}
                 onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
                 className="input"
+                disabled={!unlocked}
               />
             </Field>
             <Field label="apiSecret">
@@ -236,6 +318,7 @@ export default function ExchangeAccountsPage() {
                 value={form.apiSecret}
                 onChange={(e) => setForm({ ...form, apiSecret: e.target.value })}
                 className="input"
+                disabled={!unlocked}
               />
             </Field>
             <Field label="apiMemo">
@@ -244,6 +327,7 @@ export default function ExchangeAccountsPage() {
                 onChange={(e) => setForm({ ...form, apiMemo: e.target.value })}
                 className="input"
                 placeholder="optional (Bitmart memo)"
+                disabled={!unlocked}
               />
             </Field>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

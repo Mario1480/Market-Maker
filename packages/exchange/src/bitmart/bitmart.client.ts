@@ -114,6 +114,32 @@ export class BitmartRestClient {
     return json as T;
   }
 
+  private async signedGet<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
+    const url = new URL(path, this.baseUrl);
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        if (v === undefined) continue;
+        url.searchParams.set(k, String(v));
+      }
+    }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-BM-KEY": this.apiKey
+    };
+    const ts = nowMs();
+    headers["X-BM-TIMESTAMP"] = String(ts);
+    headers["X-BM-SIGN"] = this.signBody("{}", ts);
+
+    const res = await fetch(url, { method: "GET", headers });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || (json?.code && json.code !== 1000)) {
+      const msg = json?.message || json?.msg || res.statusText;
+      throw new Error(`Bitmart API error ${res.status}: ${msg} (${JSON.stringify(json)})`);
+    }
+    return json as T;
+  }
+
   // ---------- Public ----------
 
   async getTicker(symbol: string): Promise<MidPrice> {
@@ -345,43 +371,75 @@ export class BitmartRestClient {
 
   async getMyTrades(symbol: string, since?: string | number): Promise<Trade[]> {
     const s = normalizeSymbol(symbol);
-    const body: any = { symbol: s, limit: 50 };
-    if (typeof since === "number" && Number.isFinite(since)) {
-      body.start_time = Math.floor(since);
+    const startTime =
+      typeof since === "number" && Number.isFinite(since) ? Math.floor(since) : undefined;
+    const attempts = [
+      {
+        kind: "POST" as const,
+        path: "/spot/v4/query/user-trades",
+        body: { symbol: s, limit: 50, start_time: startTime }
+      },
+      {
+        kind: "GET" as const,
+        path: "/spot/v1/trades",
+        params: { symbol: s, limit: 50, start_time: startTime }
+      }
+    ];
+
+    let lastErr: unknown = null;
+
+    for (const attempt of attempts) {
+      try {
+        const json: any =
+          attempt.kind === "POST"
+            ? await this.request("POST", attempt.path, attempt.body, "SIGNED")
+            : await this.signedGet(attempt.path, attempt.params);
+
+        const list: any[] =
+          json?.data?.trades ??
+          json?.data?.rows ??
+          json?.data?.records ??
+          json?.data ??
+          [];
+
+        if (!Array.isArray(list)) return [];
+
+        return list
+          .map((t) => {
+            const id = String(t.trade_id ?? t.tradeId ?? t.id ?? "");
+            if (!id) return null;
+            const orderId = t.order_id ?? t.orderId ?? t.order_id;
+            const clientOrderId = t.client_order_id ?? t.clientOrderId ?? t.clientOrderID ?? undefined;
+            const side = (t.side ?? t.order_side ?? "").toLowerCase();
+            const price = Number(t.price ?? t.order_price ?? t.fill_price);
+            const qty = Number(t.size ?? t.qty ?? t.amount ?? t.fill_size);
+            const quoteQty = Number(t.notional ?? t.quote_qty ?? t.quoteQty ?? t.filled_notional);
+            const ts = Number(t.create_time ?? t.createTime ?? t.timestamp ?? t.time ?? t.ts);
+            return {
+              id,
+              orderId: orderId ? String(orderId) : undefined,
+              clientOrderId: clientOrderId ? String(clientOrderId) : undefined,
+              side: side === "buy" ? "buy" : "sell",
+              price,
+              qty,
+              quoteQty: Number.isFinite(quoteQty) ? quoteQty : undefined,
+              timestamp: Number.isFinite(ts) ? ts : Date.now()
+            } as Trade;
+          })
+          .filter(Boolean) as Trade[];
+      } catch (e) {
+        lastErr = e;
+        if (String(e).includes("404")) {
+          continue;
+        }
+        throw e;
+      }
     }
 
-    const json: any = await this.request("POST", "/spot/v4/query/user-trades", body, "SIGNED");
-    const list: any[] =
-      json?.data?.trades ??
-      json?.data?.rows ??
-      json?.data?.records ??
-      json?.data ??
-      [];
+    if (lastErr) {
+      return [];
+    }
 
-    if (!Array.isArray(list)) return [];
-
-    return list
-      .map((t) => {
-        const id = String(t.trade_id ?? t.tradeId ?? t.id ?? "");
-        if (!id) return null;
-        const orderId = t.order_id ?? t.orderId ?? t.order_id;
-        const clientOrderId = t.client_order_id ?? t.clientOrderId ?? t.clientOrderID ?? undefined;
-        const side = (t.side ?? t.order_side ?? "").toLowerCase();
-        const price = Number(t.price ?? t.order_price ?? t.fill_price);
-        const qty = Number(t.size ?? t.qty ?? t.amount ?? t.fill_size);
-        const quoteQty = Number(t.notional ?? t.quote_qty ?? t.quoteQty ?? t.filled_notional);
-        const ts = Number(t.create_time ?? t.createTime ?? t.timestamp ?? t.time ?? t.ts);
-        return {
-          id,
-          orderId: orderId ? String(orderId) : undefined,
-          clientOrderId: clientOrderId ? String(clientOrderId) : undefined,
-          side: side === "buy" ? "buy" : "sell",
-          price,
-          qty,
-          quoteQty: Number.isFinite(quoteQty) ? quoteQty : undefined,
-          timestamp: Number.isFinite(ts) ? ts : Date.now()
-        } as Trade;
-      })
-      .filter(Boolean) as Trade[];
+    return [];
   }
 }

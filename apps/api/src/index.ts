@@ -2,15 +2,35 @@ import "dotenv/config";
 import crypto from "node:crypto";
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { prisma } from "@mm/db";
 import { BitmartRestClient } from "@mm/exchange";
 import { buildMmQuotes } from "@mm/strategy";
 import { clamp } from "@mm/core";
 import { z } from "zod";
+import {
+  createReauth,
+  createSession,
+  destroySession,
+  getUserFromLocals,
+  getWorkspaceId,
+  hashPassword,
+  requireAuth,
+  requireReauth,
+  verifyPassword
+} from "./auth.js";
+import { seedAdmin } from "./seed-admin.js";
 
 const app = express();
-app.use(cors());
+const webOrigin = process.env.WEB_ORIGIN || "http://localhost:3000";
+app.use(
+  cors({
+    origin: webOrigin,
+    credentials: true
+  })
+);
 app.use(express.json());
+app.use(cookieParser());
 
 const BotCreate = z.object({
   name: z.string(),
@@ -59,6 +79,18 @@ const CexConfig = z.object({
 const AlertConfig = z.object({
   telegramBotToken: z.string().optional(),
   telegramChatId: z.string().optional()
+});
+
+const AuthPayload = z.object({
+  email: z.string().email(),
+  password: z.string().min(6)
+});
+const ReauthPayload = z.object({
+  password: z.string().min(6)
+});
+const PasswordChange = z.object({
+  currentPassword: z.string().min(6),
+  newPassword: z.string().min(6)
 });
 
 async function createBotAlert(params: {
@@ -125,7 +157,101 @@ async function sendTelegramWithFallback(text: string) {
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-app.post("/alerts/test", async (_req, res) => {
+app.post("/auth/register", async (req, res) => {
+  const allowRegister = (process.env.ALLOW_REGISTER ?? "false").toLowerCase() === "true";
+  if (!allowRegister) return res.status(403).json({ error: "registration_disabled" });
+
+  const data = AuthPayload.parse(req.body);
+  const existing = await prisma.user.findUnique({ where: { email: data.email } });
+  if (existing) return res.status(400).json({ error: "email_taken" });
+
+  const passwordHash = await hashPassword(data.password);
+  const user = await prisma.user.create({
+    data: {
+      email: data.email,
+      passwordHash,
+      workspaces: {
+        create: {
+          role: "owner",
+          workspace: { create: { name: "Default" } }
+        }
+      }
+    }
+  });
+
+  await createSession(res, user.id);
+  res.json({ ok: true });
+});
+
+app.post("/auth/login", async (req, res) => {
+  const data = AuthPayload.parse(req.body);
+  const user = await prisma.user.findUnique({ where: { email: data.email } });
+  if (!user) return res.status(401).json({ error: "invalid_credentials" });
+
+  const ok = await verifyPassword(data.password, user.passwordHash);
+  if (!ok) return res.status(401).json({ error: "invalid_credentials" });
+
+  await createSession(res, user.id);
+  res.json({ ok: true });
+});
+
+app.post("/auth/logout", requireAuth, async (req, res) => {
+  const token = req.cookies?.mm_session ?? null;
+  await destroySession(res, token);
+  res.json({ ok: true });
+});
+
+app.get("/auth/me", requireAuth, async (_req, res) => {
+  const user = getUserFromLocals(res);
+  const workspaceId = getWorkspaceId(res);
+  res.json({ id: user.id, email: user.email, workspaceId });
+});
+
+app.post("/auth/reauth", requireAuth, async (req, res) => {
+  const data = ReauthPayload.parse(req.body);
+  const user = getUserFromLocals(res);
+  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+  if (!dbUser) return res.status(401).json({ error: "unauthorized" });
+
+  const ok = await verifyPassword(data.password, dbUser.passwordHash);
+  if (!ok) return res.status(401).json({ error: "invalid_credentials" });
+
+  const session = await createReauth(res, user.id);
+  res.json({ ok: true, expiresAt: session.expiresAt });
+});
+
+app.post("/auth/change-password", requireAuth, async (req, res) => {
+  const data = PasswordChange.parse(req.body);
+  const user = getUserFromLocals(res);
+  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+  if (!dbUser) return res.status(401).json({ error: "unauthorized" });
+
+  const ok = await verifyPassword(data.currentPassword, dbUser.passwordHash);
+  if (!ok) return res.status(400).json({ error: "invalid_password" });
+
+  const nextHash = await hashPassword(data.newPassword);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: nextHash }
+  });
+
+  res.json({ ok: true });
+});
+
+app.get("/auth/reauth/status", requireAuth, async (req, res) => {
+  const token = req.cookies?.mm_reauth;
+  if (!token) return res.json({ ok: false });
+
+  const hash = crypto.createHash("sha256").update(token).digest("hex");
+  const session = await prisma.reauthSession.findUnique({ where: { tokenHash: hash } });
+  if (!session || session.expiresAt.getTime() < Date.now()) {
+    res.clearCookie("mm_reauth", { path: "/" });
+    return res.json({ ok: false });
+  }
+  res.json({ ok: true, expiresAt: session.expiresAt });
+});
+
+app.post("/alerts/test", requireAuth, async (_req, res) => {
   const text = `Test alert ✅ ${new Date().toLocaleString()}`;
   const result = await sendTelegramWithFallback(text);
 
@@ -139,28 +265,37 @@ app.post("/alerts/test", async (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/bots", async (_req, res) => {
-  const bots = await prisma.bot.findMany({ orderBy: { createdAt: "desc" } });
+app.get("/bots", requireAuth, async (_req, res) => {
+  const workspaceId = getWorkspaceId(res);
+  const bots = await prisma.bot.findMany({
+    where: { workspaceId },
+    orderBy: { createdAt: "desc" }
+  });
   res.json(bots);
 });
 
-app.get("/bots/:id", async (req, res) => {
-  const bot = await prisma.bot.findUnique({
-    where: { id: req.params.id },
+app.get("/bots/:id", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
+  const bot = await prisma.bot.findFirst({
+    where: { id: req.params.id, workspaceId },
     include: { mmConfig: true, volConfig: true, riskConfig: true, runtime: true } as any
   });
   if (!bot) return res.status(404).json({ error: "not_found" });
   res.json(bot);
 });
 
-app.get("/bots/:id/runtime", async (req, res) => {
+app.get("/bots/:id/runtime", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
+  const bot = await prisma.bot.findFirst({ where: { id: req.params.id, workspaceId } });
+  if (!bot) return res.status(404).json({ error: "not_found" });
   const rt = await prisma.botRuntime.findUnique({ where: { botId: req.params.id } });
   res.json(rt ?? null);
 });
 
-app.delete("/bots/:id", async (req, res) => {
+app.delete("/bots/:id", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
   const botId = req.params.id;
-  const bot = await prisma.bot.findUnique({ where: { id: botId } });
+  const bot = await prisma.bot.findFirst({ where: { id: botId, workspaceId } });
   if (!bot) return res.status(404).json({ error: "not_found" });
 
   await prisma.$transaction([
@@ -175,8 +310,9 @@ app.delete("/bots/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/bots/:id/open-orders", async (req, res) => {
-  const bot = await prisma.bot.findUnique({ where: { id: req.params.id } });
+app.get("/bots/:id/open-orders", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
+  const bot = await prisma.bot.findFirst({ where: { id: req.params.id, workspaceId } });
   if (!bot) return res.status(404).json({ error: "not_found" });
   if (bot.exchange.toLowerCase() !== "bitmart") {
     return res.status(400).json({ error: "unsupported_exchange" });
@@ -216,7 +352,10 @@ app.get("/bots/:id/open-orders", async (req, res) => {
   });
 });
 
-app.get("/bots/:id/alerts", async (req, res) => {
+app.get("/bots/:id/alerts", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
+  const bot = await prisma.bot.findFirst({ where: { id: req.params.id, workspaceId } });
+  if (!bot) return res.status(404).json({ error: "not_found" });
   const limit = Math.min(Number(req.query.limit || "10"), 50);
   const items = await prisma.botAlert.findMany({
     where: { botId: req.params.id },
@@ -226,13 +365,55 @@ app.get("/bots/:id/alerts", async (req, res) => {
   res.json(items);
 });
 
-app.delete("/bots/:id/alerts", async (req, res) => {
+app.delete("/bots/:id/alerts", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
+  const bot = await prisma.bot.findFirst({ where: { id: req.params.id, workspaceId } });
+  if (!bot) return res.status(404).json({ error: "not_found" });
   const id = req.params.id;
   const r = await prisma.botAlert.deleteMany({ where: { botId: id } });
   res.json({ ok: true, deleted: r.count });
 });
 
-app.post("/bots/:id/preview/mm", async (req, res) => {
+app.get("/bots/:id/exchange-keys", requireAuth, requireReauth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
+  const bot = await prisma.bot.findFirst({ where: { id: req.params.id, workspaceId } });
+  if (!bot) return res.status(404).json({ error: "not_found" });
+
+  const cfg = await prisma.cexConfig.findUnique({ where: { exchange: bot.exchange } });
+  res.json(cfg ?? null);
+});
+
+app.put("/bots/:id/exchange-keys", requireAuth, requireReauth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
+  const bot = await prisma.bot.findFirst({ where: { id: req.params.id, workspaceId } });
+  if (!bot) return res.status(404).json({ error: "not_found" });
+
+  const data = CexConfig.parse(req.body);
+  if (data.exchange !== bot.exchange) {
+    return res.status(400).json({ error: "exchange_mismatch" });
+  }
+
+  const cfg = await prisma.cexConfig.upsert({
+    where: { exchange: data.exchange },
+    update: {
+      apiKey: data.apiKey,
+      apiSecret: data.apiSecret,
+      apiMemo: data.apiMemo
+    },
+    create: {
+      exchange: data.exchange,
+      apiKey: data.apiKey,
+      apiSecret: data.apiSecret,
+      apiMemo: data.apiMemo
+    }
+  });
+  res.json(cfg);
+});
+
+app.post("/bots/:id/preview/mm", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
+  const bot = await prisma.bot.findFirst({ where: { id: req.params.id, workspaceId } });
+  if (!bot) return res.status(404).json({ error: "not_found" });
   const payload = z.object({
     mm: MMConfig,
     runtime: z
@@ -282,7 +463,7 @@ app.post("/bots/:id/preview/mm", async (req, res) => {
   res.json({ mid, bids, asks, inventoryRatio, skewPct: skew * 100, skewedMid: (mid as number) * (1 + skew) });
 });
 
-app.get("/exchanges/:exchange/symbols", async (req, res) => {
+app.get("/exchanges/:exchange/symbols", requireAuth, async (req, res) => {
   const exchange = req.params.exchange.toLowerCase();
   if (exchange !== "bitmart") {
     return res.status(400).json({ error: "unsupported_exchange" });
@@ -346,35 +527,44 @@ app.get("/exchanges/:exchange/symbols", async (req, res) => {
   res.json(usdtOnly.length > 0 ? usdtOnly : unique);
 });
 
-app.get("/settings/cex/:exchange", async (req, res) => {
+app.get("/settings/cex/:exchange", requireAuth, requireReauth, async (req, res) => {
   const exchange = req.params.exchange;
   const cfg = await prisma.cexConfig.findUnique({ where: { exchange } });
   res.json(cfg ?? null);
 });
 
-app.get("/settings/cex", async (_req, res) => {
+app.get("/settings/cex", requireAuth, async (_req, res) => {
   const items = await prisma.cexConfig.findMany({ orderBy: { updatedAt: "desc" } });
-  res.json(items);
+  const masked = items.map((cfg) => ({
+    exchange: cfg.exchange,
+    apiKey: cfg.apiKey ? `${cfg.apiKey.slice(0, 4)}...${cfg.apiKey.slice(-4)}` : "",
+    apiSecret: cfg.apiSecret ? "********" : "",
+    apiMemo: cfg.apiMemo ?? null,
+    updatedAt: cfg.updatedAt
+  }));
+  res.json(masked);
 });
 
-app.get("/settings/alerts", async (_req, res) => {
+app.get("/settings/alerts", requireAuth, async (_req, res) => {
   const cfg = await prisma.alertConfig.findUnique({ where: { key: "default" } });
   res.json(cfg ?? { telegramBotToken: null, telegramChatId: null });
 });
 
-app.delete("/settings/cex/:exchange", async (req, res) => {
+app.delete("/settings/cex/:exchange", requireAuth, requireReauth, async (req, res) => {
   const exchange = req.params.exchange;
   await prisma.cexConfig.delete({ where: { exchange } });
   res.json({ ok: true });
 });
 
-app.post("/bots", async (req, res) => {
+app.post("/bots", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
   const data = BotCreate.parse(req.body);
   const id = crypto.randomUUID();
 
   const bot = await prisma.bot.create({
     data: {
       id,
+      workspaceId,
       name: data.name,
       symbol: data.symbol,
       exchange: data.exchange,
@@ -434,7 +624,8 @@ app.post("/bots", async (req, res) => {
   res.json(bot);
 });
 
-app.put("/bots/:id/config", async (req, res) => {
+app.put("/bots/:id/config", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
   const botId = req.params.id;
 
   const payload = z.object({
@@ -450,7 +641,8 @@ app.put("/bots/:id/config", async (req, res) => {
     errors.budgetQuoteUsdt = `Minimum ${minQuoteUsdt} USDT`;
   }
 
-  const bot = await prisma.bot.findUnique({ where: { id: botId } });
+  const bot = await prisma.bot.findFirst({ where: { id: botId, workspaceId } });
+  if (!bot) return res.status(404).json({ error: "not_found" });
   const rt = await prisma.botRuntime.findUnique({ where: { botId } });
   const mid = rt?.mid ?? null;
 
@@ -484,43 +676,47 @@ app.put("/bots/:id/config", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/bots/:id/mm/start", async (req, res) => {
+app.post("/bots/:id/mm/start", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
   const botId = req.params.id;
-  const bot = await prisma.bot.findUnique({ where: { id: botId } });
+  const bot = await prisma.bot.findFirst({ where: { id: botId, workspaceId } });
   if (!bot) return res.status(404).json({ error: "bot_not_found" });
   await prisma.bot.update({ where: { id: botId }, data: { mmEnabled: true } });
   await sendTelegramWithFallback(`✅ MM started\n${bot.name} (${bot.symbol})`);
   res.json({ ok: true });
 });
 
-app.post("/bots/:id/mm/stop", async (req, res) => {
+app.post("/bots/:id/mm/stop", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
   const botId = req.params.id;
-  const bot = await prisma.bot.findUnique({ where: { id: botId } });
+  const bot = await prisma.bot.findFirst({ where: { id: botId, workspaceId } });
   if (!bot) return res.status(404).json({ error: "bot_not_found" });
   await prisma.bot.update({ where: { id: botId }, data: { mmEnabled: false } });
   await sendTelegramWithFallback(`🛑 MM stopped\n${bot.name} (${bot.symbol})`);
   res.json({ ok: true });
 });
 
-app.post("/bots/:id/vol/start", async (req, res) => {
+app.post("/bots/:id/vol/start", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
   const botId = req.params.id;
-  const bot = await prisma.bot.findUnique({ where: { id: botId } });
+  const bot = await prisma.bot.findFirst({ where: { id: botId, workspaceId } });
   if (!bot) return res.status(404).json({ error: "bot_not_found" });
   await prisma.bot.update({ where: { id: botId }, data: { volEnabled: true } });
   await sendTelegramWithFallback(`✅ Volume bot started\n${bot.name} (${bot.symbol})`);
   res.json({ ok: true });
 });
 
-app.post("/bots/:id/vol/stop", async (req, res) => {
+app.post("/bots/:id/vol/stop", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
   const botId = req.params.id;
-  const bot = await prisma.bot.findUnique({ where: { id: botId } });
+  const bot = await prisma.bot.findFirst({ where: { id: botId, workspaceId } });
   if (!bot) return res.status(404).json({ error: "bot_not_found" });
   await prisma.bot.update({ where: { id: botId }, data: { volEnabled: false } });
   await sendTelegramWithFallback(`🛑 Volume bot stopped\n${bot.name} (${bot.symbol})`);
   res.json({ ok: true });
 });
 
-app.put("/settings/cex", async (req, res) => {
+app.put("/settings/cex", requireAuth, requireReauth, async (req, res) => {
   const data = CexConfig.parse(req.body);
   const cfg = await prisma.cexConfig.upsert({
     where: { exchange: data.exchange },
@@ -539,7 +735,7 @@ app.put("/settings/cex", async (req, res) => {
   res.json(cfg);
 });
 
-app.put("/settings/alerts", async (req, res) => {
+app.put("/settings/alerts", requireAuth, async (req, res) => {
   const data = AlertConfig.parse(req.body);
   const cfg = await prisma.alertConfig.upsert({
     where: { key: "default" },
@@ -556,7 +752,7 @@ app.put("/settings/alerts", async (req, res) => {
   res.json(cfg);
 });
 
-app.post("/settings/cex/verify", async (req, res) => {
+app.post("/settings/cex/verify", requireAuth, requireReauth, async (req, res) => {
   const data = CexConfig.parse(req.body);
 
   // Minimal auth-protected call: balances requires signed headers.
@@ -590,10 +786,11 @@ app.post("/settings/cex/verify", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/bots/:id/start", async (req, res) => {
+app.post("/bots/:id/start", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
   const id = req.params.id;
 
-  const bot = await prisma.bot.findUnique({ where: { id } });
+  const bot = await prisma.bot.findFirst({ where: { id, workspaceId } });
   if (!bot) return res.status(404).json({ error: "bot_not_found" });
 
   await prisma.bot.update({
@@ -626,10 +823,11 @@ app.post("/bots/:id/start", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/bots/:id/pause", async (req, res) => {
+app.post("/bots/:id/pause", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
   const id = req.params.id;
 
-  const bot = await prisma.bot.findUnique({ where: { id } });
+  const bot = await prisma.bot.findFirst({ where: { id, workspaceId } });
   if (!bot) return res.status(404).json({ error: "bot_not_found" });
 
   await prisma.bot.update({
@@ -660,10 +858,11 @@ app.post("/bots/:id/pause", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/bots/:id/stop", async (req, res) => {
+app.post("/bots/:id/stop", requireAuth, async (req, res) => {
+  const workspaceId = getWorkspaceId(res);
   const id = req.params.id;
 
-  const bot = await prisma.bot.findUnique({ where: { id } });
+  const bot = await prisma.bot.findFirst({ where: { id, workspaceId } });
   if (!bot) return res.status(404).json({ error: "bot_not_found" });
 
   await prisma.bot.update({
@@ -697,4 +896,16 @@ app.post("/bots/:id/stop", async (req, res) => {
 });
 
 const port = Number(process.env.API_PORT || "8080");
-app.listen(port, () => console.log(`API listening on :${port}`));
+
+async function start() {
+  const seed = await seedAdmin();
+  if (!seed.seeded) {
+    console.log(`[seed] admin not created (${seed.reason})`);
+  }
+  app.listen(port, () => console.log(`API listening on :${port}`));
+}
+
+start().catch((err) => {
+  console.error("API startup failed", err);
+  process.exit(1);
+});

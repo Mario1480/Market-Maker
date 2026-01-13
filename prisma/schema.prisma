@@ -16,6 +16,8 @@ model Bot {
   mmEnabled Boolean  @default(true)
   volEnabled Boolean @default(true)
   createdAt DateTime @default(now())
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
 
   mmConfig   MarketMakingConfig?
   volConfig  VolumeConfig?
@@ -154,4 +156,58 @@ model BotOrderMap {
 
   @@unique([botId, symbol, orderId])
   @@index([botId, symbol, clientOrderId])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  sessions     Session[]
+  reauths      ReauthSession[]
+  workspaces   WorkspaceMember[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, expiresAt])
+}
+
+model ReauthSession {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, expiresAt])
+}
+
+model Workspace {
+  id        String @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  members   WorkspaceMember[]
+  bots      Bot[]
+}
+
+model WorkspaceMember {
+  id          String @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String @default("owner")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
 }
