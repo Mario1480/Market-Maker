@@ -10,7 +10,7 @@ export function LiveView({ runtime, baseSymbol }: LiveViewProps) {
   const offline = !runtime || staleness.stale;
   return (
     <Section
-      title="Life Runtime"
+      title="Live Runtime"
       right={
         offline ? (
           <span

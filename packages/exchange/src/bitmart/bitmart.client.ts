@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Balance, MidPrice, Order, Quote } from "@mm/core";
+import type { Balance, MidPrice, Order, Quote, Trade } from "@mm/core";
 import { nowMs } from "@mm/core";
 import { normalizeSymbol } from "./bitmart.mapper.js";
 import { checkMins, normalizePrice, normalizeQty, type SymbolMeta } from "./bitmart.meta.js";
@@ -341,5 +341,47 @@ export class BitmartRestClient {
       status: "open",
       clientOrderId: x.clientOrderId
     }));
+  }
+
+  async getMyTrades(symbol: string, since?: string | number): Promise<Trade[]> {
+    const s = normalizeSymbol(symbol);
+    const body: any = { symbol: s, limit: 50 };
+    if (typeof since === "number" && Number.isFinite(since)) {
+      body.start_time = Math.floor(since);
+    }
+
+    const json: any = await this.request("POST", "/spot/v4/query/user-trades", body, "SIGNED");
+    const list: any[] =
+      json?.data?.trades ??
+      json?.data?.rows ??
+      json?.data?.records ??
+      json?.data ??
+      [];
+
+    if (!Array.isArray(list)) return [];
+
+    return list
+      .map((t) => {
+        const id = String(t.trade_id ?? t.tradeId ?? t.id ?? "");
+        if (!id) return null;
+        const orderId = t.order_id ?? t.orderId ?? t.order_id;
+        const clientOrderId = t.client_order_id ?? t.clientOrderId ?? t.clientOrderID ?? undefined;
+        const side = (t.side ?? t.order_side ?? "").toLowerCase();
+        const price = Number(t.price ?? t.order_price ?? t.fill_price);
+        const qty = Number(t.size ?? t.qty ?? t.amount ?? t.fill_size);
+        const quoteQty = Number(t.notional ?? t.quote_qty ?? t.quoteQty ?? t.filled_notional);
+        const ts = Number(t.create_time ?? t.createTime ?? t.timestamp ?? t.time ?? t.ts);
+        return {
+          id,
+          orderId: orderId ? String(orderId) : undefined,
+          clientOrderId: clientOrderId ? String(clientOrderId) : undefined,
+          side: side === "buy" ? "buy" : "sell",
+          price,
+          qty,
+          quoteQty: Number.isFinite(quoteQty) ? quoteQty : undefined,
+          timestamp: Number.isFinite(ts) ? ts : Date.now()
+        } as Trade;
+      })
+      .filter(Boolean) as Trade[];
   }
 }

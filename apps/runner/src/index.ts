@@ -42,6 +42,7 @@ async function main() {
     getMidPrice: (s) => rest.getTicker(s),
     getBalances: () => rest.getBalances(),
     getOpenOrders: (s) => rest.getOpenOrders(s),
+    getMyTrades: (s, since) => rest.getMyTrades(s, since),
     placeOrder: (q) => rest.placeOrder(q),
     cancelOrder: (s, id) => rest.cancelOrder(s, id),
     cancelAll: (s) => rest.cancelAll(s)

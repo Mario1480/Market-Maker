@@ -72,7 +72,6 @@ export class VolumeScheduler {
     const useMarket = takerChance > 0 && Math.random() < takerChance;
 
     state.lastActionMs = now;
-    state.tradedNotional += notional;
     state.pendingClientOrderId = clientOrderId;
 
     if (useMarket) {

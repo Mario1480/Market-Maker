@@ -120,3 +120,38 @@ model BotAlert {
 
   @@index([botId, createdAt])
 }
+
+model BotFillCursor {
+  id                  String   @id @default(cuid())
+  botId               String
+  symbol              String
+  dayKey              String
+  tradedNotionalToday Float    @default(0)
+  lastTradeId         String?
+  updatedAt           DateTime @updatedAt
+
+  @@unique([botId, symbol, dayKey])
+  @@index([botId, symbol, dayKey])
+}
+
+model BotFillSeen {
+  id        String   @id @default(cuid())
+  botId     String
+  symbol    String
+  tradeId   String
+  createdAt DateTime @default(now())
+
+  @@unique([botId, symbol, tradeId])
+}
+
+model BotOrderMap {
+  id            String   @id @default(cuid())
+  botId         String
+  symbol        String
+  orderId       String
+  clientOrderId String
+  createdAt     DateTime @default(now())
+
+  @@unique([botId, symbol, orderId])
+  @@index([botId, symbol, clientOrderId])
+}

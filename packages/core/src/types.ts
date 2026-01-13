@@ -53,6 +53,17 @@ export interface Order {
   clientOrderId?: string;
 }
 
+export interface Trade {
+  id: string;
+  orderId?: string;
+  clientOrderId?: string;
+  side: Side;
+  price: number;
+  qty: number;
+  quoteQty?: number;
+  timestamp: number; // ms
+}
+
 export interface Balance {
   asset: string;
   free: number;

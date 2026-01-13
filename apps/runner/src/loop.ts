@@ -8,8 +8,9 @@ import { BotStateMachine } from "./state-machine.js";
 import { OrderManager } from "./order-manager.js";
 import { inventoryRatio } from "./inventory.js";
 import { log } from "./logger.js";
-import { loadBotAndConfigs, updateBotFlags, writeAlert, writeRuntime } from "./db.js";
+import { loadBotAndConfigs, updateBotFlags, writeAlert, writeRuntime, upsertOrderMap } from "./db.js";
 import { alert } from "./alerts.js";
+import { syncFills } from "./fills.js";
 
 function normalizeAsset(a: string): string {
   return a.toUpperCase().split("-")[0];
@@ -50,6 +51,8 @@ export async function runLoop(params: {
 
   const reloadEveryMs = 5_000;
   let lastReload = 0;
+  const fillsEveryMs = 3_000;
+  let lastFillSync = 0;
 
   sm.set("RUNNING");
   await writeRuntime({
@@ -222,6 +225,20 @@ export async function runLoop(params: {
         "open orders breakdown"
       );
 
+      if (t0 - lastFillSync > fillsEveryMs) {
+        lastFillSync = t0;
+        try {
+          const fillRes = await syncFills({ botId, symbol, exchange });
+          if (volState.dayKey !== fillRes.dayKey) {
+            volState.dayKey = fillRes.dayKey;
+            volState.dailyAlertSent = false;
+          }
+          volState.tradedNotional = fillRes.tradedNotionalToday;
+        } catch (e) {
+          log.warn({ err: String(e) }, "fills sync failed");
+        }
+      }
+
       if (!botRow.mmEnabled && openMm.length) {
         for (const o of openMm) {
           try {
@@ -370,6 +387,10 @@ export async function runLoop(params: {
 
       // MM sync (only manage mm-* orders so we don't cancel volume orders)
       const { cancel, place } = orderMgr.diff(desiredFiltered, openMm);
+      const maxOpen = risk.maxOpenOrders ?? 0;
+      const projectedOpen = maxOpen > 0
+        ? Math.max(0, open.length - cancel.length) + place.length
+        : open.length;
 
       for (const o of cancel) {
         try {
@@ -388,14 +409,24 @@ export async function runLoop(params: {
 
       // Volume bot (PASSIVE-first: post-only limit near mid; MIXED may use rare market)
       if (botRow.volEnabled) {
-        const maxOpen = risk.maxOpenOrders ?? 0;
-        if (maxOpen > 0 && open.length >= maxOpen) {
-          log.info({ openOrders: open.length, maxOpen }, "volume skipped: open order cap reached");
+        if (maxOpen > 0 && projectedOpen >= maxOpen) {
+          log.info(
+            { openOrders: open.length, projectedOpen, maxOpen },
+            "volume skipped: open order cap reached"
+          );
         } else {
         const volOrder = volSched.maybeCreateTrade(symbol, mid.mid, volState);
         if (volOrder) {
           try {
-            await exchange.placeOrder(volOrder);
+            const placed = await exchange.placeOrder(volOrder);
+            if (placed?.id && volOrder.clientOrderId) {
+              await upsertOrderMap({
+                botId,
+                symbol,
+                orderId: placed.id,
+                clientOrderId: volOrder.clientOrderId
+              });
+            }
             log.info({ volOrder }, "volume trade submitted");
           } catch (e) {
             log.warn({ err: String(e), volOrder }, "volume trade failed");

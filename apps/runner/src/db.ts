@@ -181,3 +181,28 @@ export async function updateBotFlags(params: {
   if (Object.keys(data).length === 0) return;
   await prisma.bot.update({ where: { id: params.botId }, data });
 }
+
+export async function upsertOrderMap(params: {
+  botId: string;
+  symbol: string;
+  orderId: string;
+  clientOrderId: string;
+}) {
+  if (!params.orderId || !params.clientOrderId) return;
+  await prisma.botOrderMap.upsert({
+    where: {
+      botId_symbol_orderId: {
+        botId: params.botId,
+        symbol: params.symbol,
+        orderId: params.orderId
+      }
+    },
+    update: { clientOrderId: params.clientOrderId },
+    create: {
+      botId: params.botId,
+      symbol: params.symbol,
+      orderId: params.orderId,
+      clientOrderId: params.clientOrderId
+    }
+  });
+}
