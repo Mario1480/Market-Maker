@@ -360,6 +360,12 @@ export class BitmartRestClient {
     );
 
     const list: any[] = json.data?.orders ?? json.data ?? [];
+    if (process.env.BITMART_DEBUG === "1") {
+      const sample = list[0] ?? null;
+      const keys = sample ? Object.keys(sample) : [];
+      console.log("[bitmart] open orders sample keys", keys);
+      console.log("[bitmart] open orders sample", sample);
+    }
     return list.map((x) => ({
       id: String(x.orderId ?? x.order_id ?? x.id),
       symbol: s,
