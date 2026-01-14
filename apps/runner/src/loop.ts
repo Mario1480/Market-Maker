@@ -43,10 +43,10 @@ export async function runLoop(params: {
   const priceSource = new SlavePriceSource(exchange);
   let volSched = new VolumeScheduler(vol);
   let riskEngine = new RiskEngine(risk);
-  const priceEpsPct = Number(process.env.MM_PRICE_EPS_PCT || "0.002");
+  const priceEpsPct = Number(process.env.MM_PRICE_EPS_PCT || "0.005");
   const qtyEpsPct = Number(process.env.MM_QTY_EPS_PCT || "0.02");
-  const minRepriceMs = Number(process.env.MM_REPRICE_MS || "5000");
-  const minRepricePct = Number(process.env.MM_REPRICE_PCT || "0.003");
+  const minRepriceMs = Number(process.env.MM_REPRICE_MS || "10000");
+  const minRepricePct = Number(process.env.MM_REPRICE_PCT || "0.01");
   const orderMgr = new OrderManager({ priceEpsPct, qtyEpsPct });
   let lastRepriceAt = 0;
   let lastRepriceMid = 0;
@@ -324,19 +324,6 @@ export async function runLoop(params: {
         if (q.type !== "limit" || !q.price) return true;
         return q.price * q.qty >= 5;
       });
-      log.debug(
-        {
-          mmEnabled: botRow.mmEnabled,
-          desiredCount: desiredFiltered.length,
-          levelsUp: mm.levelsUp,
-          levelsDown: mm.levelsDown,
-          budgetQuoteUsdt: mm.budgetQuoteUsdt,
-          budgetBaseToken: mm.budgetBaseToken,
-          minOrderUsdt: mm.minOrderUsdt,
-          maxOrderUsdt: mm.maxOrderUsdt
-        },
-        "mm desired summary"
-      );
 
       const decision = riskEngine.evaluate({
         balances,
