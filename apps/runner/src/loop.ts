@@ -407,12 +407,16 @@ export async function runLoop(params: {
         } catch {}
       }
 
-      for (const q of place) {
-        try {
-          await exchange.placeOrder(q);
-        } catch (e) {
-          log.warn({ err: String(e), q }, "place failed");
+      if (cancel.length === 0) {
+        for (const q of place) {
+          try {
+            await exchange.placeOrder(q);
+          } catch (e) {
+            log.warn({ err: String(e), q }, "place failed");
+          }
         }
+      } else {
+        log.debug({ cancel: cancel.length, place: place.length }, "skip place: cancel pending");
       }
 
 
