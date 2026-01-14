@@ -268,4 +268,4 @@ Wenn du möchtest, mache ich dir als Nächstes auch:
 - 📄 `PRODUCTION_DEPLOYMENT.md`
 - 📄 `SECURITY.md`
 
-Sag einfach welches 👍 
+Sag einfach welches 👍
