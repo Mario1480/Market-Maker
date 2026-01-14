@@ -43,7 +43,7 @@ export async function runLoop(params: {
   const priceSource = new SlavePriceSource(exchange);
   let volSched = new VolumeScheduler(vol);
   let riskEngine = new RiskEngine(risk);
-  const orderMgr = new OrderManager({ priceEpsPct: 0.0005, qtyEpsPct: 0.02 });
+  const orderMgr = new OrderManager({ priceEpsPct: 0.002, qtyEpsPct: 0.02 });
 
   const volState = { dayKey: "init", tradedNotional: 0, lastActionMs: 0, dailyAlertSent: false };
   const { base } = splitSymbol(symbol);
