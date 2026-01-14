@@ -318,6 +318,19 @@ export async function runLoop(params: {
         if (q.type !== "limit" || !q.price) return true;
         return q.price * q.qty >= 5;
       });
+      log.debug(
+        {
+          mmEnabled: botRow.mmEnabled,
+          desiredCount: desiredFiltered.length,
+          levelsUp: mm.levelsUp,
+          levelsDown: mm.levelsDown,
+          budgetQuoteUsdt: mm.budgetQuoteUsdt,
+          budgetBaseToken: mm.budgetBaseToken,
+          minOrderUsdt: mm.minOrderUsdt,
+          maxOrderUsdt: mm.maxOrderUsdt
+        },
+        "mm desired summary"
+      );
 
       const decision = riskEngine.evaluate({
         balances,
