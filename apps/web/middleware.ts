@@ -25,7 +25,30 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  const apiBase =
+    process.env.API_URL ??
+    process.env.NEXT_PUBLIC_API_URL;
+  if (!apiBase) return NextResponse.next();
+
+  return validateSession(req, apiBase);
+}
+
+async function validateSession(req: NextRequest, apiBase: string) {
+  try {
+    const res = await fetch(`${apiBase}/auth/me`, {
+      headers: { cookie: req.headers.get("cookie") ?? "" },
+      cache: "no-store"
+    });
+    if (res.ok) return NextResponse.next();
+  } catch {
+    // fall through to redirect
+  }
+
+  const url = req.nextUrl.clone();
+  url.pathname = "/login";
+  const resp = NextResponse.redirect(url);
+  resp.cookies.set("mm_session", "", { path: "/", maxAge: 0 });
+  return resp;
 }
 
 export const config = {
