@@ -47,9 +47,11 @@ export async function runLoop(params: {
   const qtyEpsPct = Number(process.env.MM_QTY_EPS_PCT || "0.02");
   const minRepriceMs = Number(process.env.MM_REPRICE_MS || "10000");
   const minRepricePct = Number(process.env.MM_REPRICE_PCT || "0.01");
+  const invAlpha = Number(process.env.MM_INV_ALPHA || "0.1");
   const orderMgr = new OrderManager({ priceEpsPct, qtyEpsPct });
   let lastRepriceAt = 0;
   let lastRepriceMid = 0;
+  let smoothedInvRatio: number | null = null;
 
   const volState = { dayKey: "init", tradedNotional: 0, lastActionMs: 0, dailyAlertSent: false };
   const { base } = splitSymbol(symbol);
@@ -305,12 +307,17 @@ export async function runLoop(params: {
       }
 
       const invRatio = inventoryRatio(balances, base, mm.budgetBaseToken);
+      if (smoothedInvRatio === null || !Number.isFinite(smoothedInvRatio)) {
+        smoothedInvRatio = invRatio;
+      } else {
+        smoothedInvRatio = smoothedInvRatio + (invRatio - smoothedInvRatio) * invAlpha;
+      }
       const desiredQuotes = botRow.mmEnabled
         ? buildMmQuotes({
             symbol,
             mid: mid.mid,
             cfg: mm,
-            inventoryRatio: invRatio,
+            inventoryRatio: smoothedInvRatio,
             includeJitter: true
           })
         : [];
