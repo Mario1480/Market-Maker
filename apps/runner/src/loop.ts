@@ -432,23 +432,46 @@ export async function runLoop(params: {
             "volume skipped: open order cap reached"
           );
         } else {
-        const volOrder = volSched.maybeCreateTrade(symbol, mid.mid, volState);
-        if (volOrder) {
-          try {
-            const placed = await exchange.placeOrder(volOrder);
-            if (placed?.id && volOrder.clientOrderId) {
-              await upsertOrderMap({
-                botId,
-                symbol,
-                orderId: placed.id,
-                clientOrderId: volOrder.clientOrderId
-              });
+          const volOrder = volSched.maybeCreateTrade(symbol, mid.mid, volState);
+          if (volOrder) {
+            const safeOrder = { ...volOrder };
+            if (safeOrder.type === "market") {
+              if (safeOrder.side === "buy") {
+                const quoteQty = Math.min(
+                  safeOrder.quoteQty ?? safeOrder.qty * mid.mid,
+                  freeUsdt
+                );
+                if (quoteQty < vol.minTradeUsdt) {
+                  log.info({ quoteQty }, "volume skipped: insufficient USDT");
+                  return;
+                }
+                safeOrder.quoteQty = quoteQty;
+                safeOrder.qty = quoteQty / mid.mid;
+              } else {
+                const qty = Math.min(safeOrder.qty, freeBase);
+                const notional = qty * mid.mid;
+                if (notional < vol.minTradeUsdt) {
+                  log.info({ notional }, "volume skipped: insufficient base");
+                  return;
+                }
+                safeOrder.qty = qty;
+              }
             }
-            log.info({ volOrder }, "volume trade submitted");
-          } catch (e) {
-            log.warn({ err: String(e), volOrder }, "volume trade failed");
+            try {
+              const placed = await exchange.placeOrder(safeOrder);
+              if (placed?.id && safeOrder.clientOrderId) {
+                await upsertOrderMap({
+                  botId,
+                  symbol,
+                  orderId: placed.id,
+                  clientOrderId: safeOrder.clientOrderId
+                });
+              }
+              log.info({ volOrder: safeOrder }, "volume trade submitted");
+            } catch (e) {
+              log.warn({ err: String(e), volOrder: safeOrder }, "volume trade failed");
+            }
           }
-        }
         }
       }
 
