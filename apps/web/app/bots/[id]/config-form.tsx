@@ -42,7 +42,7 @@ export function ConfigForm({
         title="Market Making"
         defaultOpen
       >
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="gridTwoCol">
           <div>
             <Field
               label="Spread (%)"
@@ -212,7 +212,7 @@ function Field(props: {
   }
 
   return (
-    <label style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: 8, marginBottom: 8, alignItems: "center" }}>
+    <label className="fieldRow">
       <span style={{ fontSize: 13 }}>
         {props.label}
         {props.hint ? (
@@ -226,9 +226,7 @@ function Field(props: {
         className="input"
       />
       {props.error ? (
-        <span style={{ gridColumn: "2 / 3", color: "#fca5a5", fontSize: 11 }}>
-          {props.error}
-        </span>
+        <span className="fieldRowError">{props.error}</span>
       ) : null}
     </label>
   );
@@ -242,7 +240,7 @@ function SelectField(props: {
   onChange: (v: string) => void;
 }) {
   return (
-    <label style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: 8, marginBottom: 8, alignItems: "center" }}>
+    <label className="fieldRow">
       <span style={{ fontSize: 13 }}>
         {props.label}
         {props.hint ? (

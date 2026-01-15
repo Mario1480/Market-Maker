@@ -205,7 +205,7 @@ export default function ExchangeAccountsPage() {
         Manage your connected trading accounts.
       </div>
 
-      <div className="homeGrid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+      <div className="homeGrid homeGridEqual">
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <h3 style={{ margin: 0 }}>Accounts</h3>
@@ -363,7 +363,7 @@ function Section(props: { title: string; children: React.ReactNode }) {
 
 function Field(props: { label: string; children: React.ReactNode }) {
   return (
-    <label style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: 8, marginBottom: 8, alignItems: "center" }}>
+    <label className="fieldRow">
       <span style={{ fontSize: 13 }}>{props.label}</span>
       {props.children}
     </label>

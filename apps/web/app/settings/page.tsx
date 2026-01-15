@@ -13,7 +13,7 @@ export default function SettingsPage() {
         Settings are grouped by area.
       </div>
 
-      <div className="homeGrid" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 16 }}>
+      <div className="homeGrid homeGridEqual" style={{ marginBottom: 16 }}>
         <Link className="card" href="/settings/exchange-accounts" style={{ padding: 12 }}>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>Exchange accounts</div>
           <div style={{ fontSize: 12, color: "var(--muted)" }}>Manage your connected trading accounts</div>

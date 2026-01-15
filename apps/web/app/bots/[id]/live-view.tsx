@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 type LiveViewProps = {
   runtime: any;
   baseSymbol?: string;
@@ -35,7 +37,7 @@ export function LiveView({ runtime, baseSymbol }: LiveViewProps) {
               {hint}
             </div>
           ) : null}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div className="gridTwoCol" style={{ "--grid-gap": "8px" } as CSSProperties}>
             <Kv k="Mid price" v={runtime.mid} />
             <Kv k="Best bid" v={runtime.bid} />
             <Kv k="Best ask" v={runtime.ask} />

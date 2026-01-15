@@ -261,7 +261,7 @@ export default function BotPage() {
           {toast.msg}
         </div>
       ) : null}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+      <div className="adminHeader" style={{ alignItems: "baseline" }}>
         <div>
           <h2 style={{ margin: 0 }}>{bot.name}</h2>
           <div style={{ fontSize: 12, opacity: 0.8 }}>
@@ -290,7 +290,7 @@ export default function BotPage() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "12px 0" }}>
+      <div className="gridTwoCol" style={{ margin: "12px 0" }}>
         <div className="card" style={{ padding: 12 }}>
         <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 2 }}>Runner controls</div>
         <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 6 }}>
@@ -429,7 +429,7 @@ export default function BotPage() {
             </span>
           ) : null}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" }}>
+        <div className="gridTwoCol">
           <PreviewTable title="Asks" rows={preview?.asks ?? []} accent="#ef4444" />
           <PreviewTable title="Bids" rows={preview?.bids ?? []} accent="#22c55e" />
         </div>

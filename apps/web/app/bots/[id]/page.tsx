@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { ApiError, apiDel, apiGet, apiPost } from "../../../lib/api";
 
 type Order = {
@@ -264,7 +265,7 @@ export default function BotOverviewPage() {
       <div className="overviewGrid">
         <section className="card" style={{ padding: 12, overflow: "hidden" }}>
           <h3 style={{ marginTop: 0 }}>Budget</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="gridTwoCol">
             <div className="card" style={{ padding: 10 }}>
               <div className="adminMeta">Free {baseSymbol}</div>
               <div style={{ fontSize: 18, fontWeight: 700 }}>{rt?.freeBase ?? "—"}</div>
@@ -282,7 +283,7 @@ export default function BotOverviewPage() {
 
         <section className="card" style={{ padding: 12 }}>
           <h3 style={{ marginTop: 0 }}>Live Runtime</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div className="gridTwoCol" style={{ "--grid-gap": "8px" } as CSSProperties}>
             <Kv k="Mid price" v={rt?.mid} />
             <Kv k="Best bid" v={rt?.bid} />
             <Kv k="Best ask" v={rt?.ask} />
@@ -308,12 +309,7 @@ export default function BotOverviewPage() {
             Mid: {rt?.mid ?? "—"}
           </div>
           <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 12,
-              alignItems: "start"
-            }}
+            className="gridTwoCol"
           >
             <OrderTable title="Asks" rows={asks} accent="#ef4444" />
             <OrderTable title="Bids" rows={bids} accent="#22c55e" />

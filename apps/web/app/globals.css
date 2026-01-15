@@ -168,6 +168,27 @@ a { color: inherit; }
   }
 }
 
+.gridTwoCol {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--grid-gap, 12px);
+  align-items: start;
+}
+
+.fieldRow {
+  display: grid;
+  grid-template-columns: var(--label-width, 180px) 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.fieldRowError {
+  grid-column: 2 / 3;
+  color: #fca5a5;
+  font-size: 11px;
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -224,8 +245,15 @@ a { color: inherit; }
   align-items: start;
 }
 
+.homeGridEqual {
+  grid-template-columns: 1fr 1fr;
+}
+
 @media (max-width: 900px) {
   .homeGrid {
+    grid-template-columns: 1fr;
+  }
+  .homeGridEqual {
     grid-template-columns: 1fr;
   }
   .homeGrid .btn {
@@ -366,6 +394,44 @@ a { color: inherit; }
   }
   .adminCards {
     display: grid;
+  }
+}
+
+@media (max-width: 700px) {
+  .container {
+    padding: 18px 12px 48px;
+  }
+  .appHeaderInner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .appLogoMark {
+    width: 44px;
+    height: 44px;
+  }
+  .appLogoText {
+    font-size: 18px;
+  }
+  .appNav {
+    width: 100%;
+  }
+  .appNav .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .dashboardHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .gridTwoCol {
+    grid-template-columns: 1fr;
+  }
+  .fieldRow {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .fieldRowError {
+    grid-column: 1 / -1;
   }
 }
 
