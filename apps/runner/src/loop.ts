@@ -574,7 +574,8 @@ export async function runLoop(params: {
               lastVolTradeAt = Date.now();
               log.info({ volOrder: safeOrder }, "volume trade submitted");
 
-              if (activeVol && safeOrder.type === "limit" && safeOrder.price) {
+              const allowTaker = activeVol || (vol.mode === "MIXED" && Math.random() < 0.2);
+              if (allowTaker && safeOrder.type === "limit" && safeOrder.price) {
                 let skipTaker = false;
                 const notional = safeOrder.price * safeOrder.qty;
                 const taker = safeOrder.side === "buy"
