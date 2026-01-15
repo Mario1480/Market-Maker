@@ -160,22 +160,25 @@ model BotOrderMap {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
-  sessions     Session[]
-  reauths      ReauthSession[]
-  workspaces   WorkspaceMember[]
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  passwordHash       String
+  autoLogoutEnabled  Boolean  @default(true)
+  autoLogoutMinutes  Int      @default(60)
+  createdAt          DateTime @default(now())
+  sessions           Session[]
+  reauths            ReauthSession[]
+  workspaces         WorkspaceMember[]
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  tokenHash String   @unique
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-  user      User     @relation(fields: [userId], references: [id])
+  id           String   @id @default(cuid())
+  userId       String
+  tokenHash    String   @unique
+  createdAt    DateTime @default(now())
+  lastActiveAt DateTime @default(now())
+  expiresAt    DateTime
+  user         User     @relation(fields: [userId], references: [id])
 
   @@index([userId, expiresAt])
 }
