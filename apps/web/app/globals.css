@@ -175,6 +175,9 @@ a { color: inherit; }
   align-items: start;
 }
 
+.gridTwoCol > * {
+  min-width: 0;
+}
 .fieldRow {
   display: grid;
   grid-template-columns: var(--label-width, 180px) 1fr;
@@ -245,19 +248,29 @@ a { color: inherit; }
   align-items: start;
 }
 
+.homeGrid > * {
+  min-width: 0;
+}
 .homeGridEqual {
   grid-template-columns: 1fr 1fr;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   .homeGrid {
     grid-template-columns: 1fr;
   }
   .homeGridEqual {
     grid-template-columns: 1fr;
   }
-  .homeGrid .btn {
-    width: 100%;
+  .gridTwoCol {
+    grid-template-columns: 1fr;
+  }
+  .fieldRow {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .fieldRowError {
+    grid-column: 1 / -1;
   }
 }
 
@@ -423,15 +436,9 @@ a { color: inherit; }
     flex-direction: column;
     align-items: flex-start;
   }
+  .homeGrid,
   .gridTwoCol {
-    grid-template-columns: 1fr;
-  }
-  .fieldRow {
-    grid-template-columns: 1fr;
-    align-items: start;
-  }
-  .fieldRowError {
-    grid-column: 1 / -1;
+    gap: 12px;
   }
 }
 
