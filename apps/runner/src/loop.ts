@@ -314,10 +314,11 @@ export async function runLoop(params: {
       } else {
         smoothedInvRatio = smoothedInvRatio + (invRatio - smoothedInvRatio) * invAlpha;
       }
+      const mmMid = Number.isFinite(mid.last) && (mid.last as number) > 0 ? (mid.last as number) : mid.mid;
       const desiredQuotes = botRow.mmEnabled
         ? buildMmQuotes({
             symbol,
-            mid: mid.mid,
+            mid: mmMid,
             cfg: mm,
             inventoryRatio: smoothedInvRatio,
             includeJitter: true
