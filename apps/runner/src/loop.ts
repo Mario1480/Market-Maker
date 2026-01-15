@@ -3,6 +3,7 @@ import type { MarketMakingConfig, RiskConfig, VolumeConfig, Balance } from "@mm/
 import { splitSymbol } from "@mm/exchange";
 import { SlavePriceSource } from "@mm/pricing";
 import { buildMmQuotes, VolumeScheduler } from "@mm/strategy";
+import type { VolumeState as VolState } from "@mm/strategy";
 import { RiskEngine } from "@mm/risk";
 import { BotStateMachine } from "./state-machine.js";
 import { OrderManager } from "./order-manager.js";
@@ -55,7 +56,7 @@ export async function runLoop(params: {
   let smoothedInvRatio: number | null = null;
   let lastVolTradeAt = 0;
 
-  const volState = { dayKey: "init", tradedNotional: 0, lastActionMs: 0, dailyAlertSent: false };
+  const volState = { dayKey: "init", tradedNotional: 0, lastActionMs: 0, dailyAlertSent: false } as VolState;
   const { base } = splitSymbol(symbol);
   const mmRunId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
@@ -450,26 +451,54 @@ export async function runLoop(params: {
         } else {
           const volOrder = volSched.maybeCreateTrade(symbol, mid.mid, volState);
           if (volOrder) {
+            let skipVolume = false;
             const safeOrder = { ...volOrder };
             if (activeVol) {
               const bid = mid.bid ?? mid.mid;
               const ask = mid.ask ?? mid.mid;
+              const ref = Number.isFinite(mid.last) && (mid.last as number) > 0 ? (mid.last as number) : mid.mid;
               const notional = safeOrder.quoteQty ?? safeOrder.qty * mid.mid;
               const canSellBase = freeBase * bid >= vol.minTradeUsdt;
               const canBuyUsdt = freeUsdt >= vol.minTradeUsdt;
               if (!canSellBase && !canBuyUsdt) {
                 log.info({ freeUsdt, freeBase }, "volume skipped: insufficient balances");
-                return;
+                skipVolume = true;
               }
-              if (!canSellBase) safeOrder.side = "sell";
-              if (!canBuyUsdt) safeOrder.side = "buy";
-              const price = safeOrder.side === "buy" ? bid : ask;
+
+              if (!skipVolume) {
+              let nextSide = safeOrder.side;
+              if (!canSellBase) nextSide = "sell";
+              if (!canBuyUsdt) nextSide = "buy";
+
+              const lastSide = volState.lastSide;
+              let streak = volState.sideStreak ?? 0;
+              if (lastSide && nextSide === lastSide) {
+                if (streak >= 5) {
+                  nextSide = lastSide === "buy" ? "sell" : "buy";
+                } else if (Math.random() < 0.4) {
+                  nextSide = lastSide === "buy" ? "sell" : "buy";
+                }
+              }
+              streak = nextSide === lastSide ? streak + 1 : 1;
+              volState.lastSide = nextSide;
+              volState.sideStreak = streak;
+              safeOrder.side = nextSide;
+
+              const basePct = Math.max(0.0005, mm.spreadPct / 2);
+              const pct = basePct * (0.2 + Math.random() * 0.4);
+              let price = nextSide === "buy" ? ref * (1 - pct) : ref * (1 + pct);
+              if (Number.isFinite(price)) {
+                if (nextSide === "buy" && mid.ask) price = Math.min(price, mid.ask * 0.999);
+                if (nextSide === "sell" && mid.bid) price = Math.max(price, mid.bid * 1.001);
+              }
+
               if (Number.isFinite(price) && price > 0 && Number.isFinite(notional)) {
                 safeOrder.type = "limit";
                 safeOrder.postOnly = true;
                 safeOrder.price = price;
                 safeOrder.qty = notional / price;
                 safeOrder.quoteQty = undefined;
+              }
               }
             } else if (safeOrder.type === "market" && botRow.mmEnabled) {
               const ref = Number.isFinite(mid.last) && (mid.last as number) > 0 ? (mid.last as number) : mid.mid;
@@ -487,7 +516,7 @@ export async function runLoop(params: {
                 safeOrder.quoteQty = undefined;
               }
             }
-            if (safeOrder.type === "market") {
+            if (!skipVolume && safeOrder.type === "market") {
               if (safeOrder.side === "buy") {
                 const quoteQty = Math.min(
                   safeOrder.quoteQty ?? safeOrder.qty * mid.mid,
@@ -495,7 +524,7 @@ export async function runLoop(params: {
                 );
                 if (quoteQty < vol.minTradeUsdt) {
                   log.info({ quoteQty }, "volume skipped: insufficient USDT");
-                  return;
+                  skipVolume = true;
                 }
                 safeOrder.quoteQty = quoteQty;
                 safeOrder.qty = quoteQty / mid.mid;
@@ -504,12 +533,12 @@ export async function runLoop(params: {
                 const notional = qty * mid.mid;
                 if (notional < vol.minTradeUsdt) {
                   log.info({ notional }, "volume skipped: insufficient base");
-                  return;
+                  skipVolume = true;
                 }
                 safeOrder.qty = qty;
               }
             }
-            if (safeOrder.type === "limit" && safeOrder.postOnly && botRow.mmEnabled) {
+            if (!skipVolume && safeOrder.type === "limit" && safeOrder.postOnly && botRow.mmEnabled) {
               const ref = Number.isFinite(mid.last) && (mid.last as number) > 0 ? (mid.last as number) : mid.mid;
               const halfMin = Math.max(0, mm.spreadPct / 2);
               if (halfMin > 0 && safeOrder.price && safeOrder.qty) {
@@ -525,7 +554,8 @@ export async function runLoop(params: {
               }
             }
 
-            try {
+            if (!skipVolume) {
+              try {
               const placed = await exchange.placeOrder(safeOrder);
               if (placed?.id && safeOrder.clientOrderId) {
                 await upsertOrderMap({
@@ -539,6 +569,7 @@ export async function runLoop(params: {
               log.info({ volOrder: safeOrder }, "volume trade submitted");
 
               if (activeVol && safeOrder.type === "limit" && safeOrder.price) {
+                let skipTaker = false;
                 const notional = safeOrder.price * safeOrder.qty;
                 const taker = safeOrder.side === "buy"
                   ? {
@@ -560,33 +591,36 @@ export async function runLoop(params: {
                   const sellNotional = taker.qty * safeOrder.price;
                   if (!Number.isFinite(taker.qty) || taker.qty <= 0 || sellNotional < vol.minTradeUsdt) {
                     log.info({ sellNotional }, "volume skipped: insufficient base for taker");
-                    return;
+                    skipTaker = true;
                   }
                 } else {
                   const buyNotional = taker.quoteQty ?? 0;
                   if (!Number.isFinite(buyNotional) || buyNotional < vol.minTradeUsdt) {
                     log.info({ buyNotional }, "volume skipped: insufficient USDT for taker");
-                    return;
+                    skipTaker = true;
                   }
                   taker.qty = buyNotional / mid.mid;
                 }
-                try {
-                  const placedTaker = await exchange.placeOrder(taker);
-                  if (placedTaker?.id && taker.clientOrderId) {
-                    await upsertOrderMap({
-                      botId,
-                      symbol,
-                      orderId: placedTaker.id,
-                      clientOrderId: taker.clientOrderId
-                    });
+                if (!skipTaker) {
+                  try {
+                    const placedTaker = await exchange.placeOrder(taker);
+                    if (placedTaker?.id && taker.clientOrderId) {
+                      await upsertOrderMap({
+                        botId,
+                        symbol,
+                        orderId: placedTaker.id,
+                        clientOrderId: taker.clientOrderId
+                      });
+                    }
+                    log.info({ volOrder: taker }, "volume trade submitted (taker)");
+                  } catch (e) {
+                    log.warn({ err: String(e), volOrder: taker }, "volume trade failed (taker)");
                   }
-                  log.info({ volOrder: taker }, "volume trade submitted (taker)");
-                } catch (e) {
-                  log.warn({ err: String(e), volOrder: taker }, "volume trade failed (taker)");
                 }
               }
-            } catch (e) {
-              log.warn({ err: String(e), volOrder: safeOrder }, "volume trade failed");
+              } catch (e) {
+                log.warn({ err: String(e), volOrder: safeOrder }, "volume trade failed");
+              }
             }
           }
         }
