@@ -85,8 +85,8 @@ export class VolumeScheduler {
     const price = passivePrice(mid, side);
     const qty = notional / price;
 
-    // Optional taker fallback in MIXED mode (rare); ACTIVE uses taker to stay on pace.
-    const takerChance = isActiveMode ? 1 : this.cfg.mode === "MIXED" ? 0.10 : 0;
+    // Optional taker fallback in MIXED mode (rare).
+    const takerChance = this.cfg.mode === "MIXED" ? 0.10 : 0;
     const useMarket = takerChance > 0 && Math.random() < takerChance;
 
     state.lastActionMs = now;
