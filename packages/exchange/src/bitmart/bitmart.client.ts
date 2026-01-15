@@ -291,6 +291,8 @@ export class BitmartRestClient {
       body.price = String(price);
       body.size = String(qty);
     } else {
+      const isMarketBuy = q.side === "buy";
+      const quoteQty0 = isMarketBuy && Number.isFinite(q.quoteQty) ? q.quoteQty as number : null;
       const qty0 = q.qty;
       const qty = normalizeQty(qty0, meta);
 
@@ -298,11 +300,15 @@ export class BitmartRestClient {
         console.warn(`[bitmart] normalized ${symbol} market ${q.side} qty ${qty0}→${qty}`);
       }
 
-      if (meta?.minQty && qty < meta.minQty) {
+      if (!isMarketBuy && meta?.minQty && qty < meta.minQty) {
         throw new Error(`[bitmart] market order below minQty: ${qty} < ${meta.minQty}`);
       }
 
-      body.size = String(qty);
+      if (isMarketBuy && quoteQty0 && quoteQty0 > 0) {
+        body.notional = String(quoteQty0);
+      } else {
+        body.size = String(qty);
+      }
     }
 
     // Post-only: Bitmart uses `post_only` or `postOnly` depending on version.
