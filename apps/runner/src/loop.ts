@@ -451,7 +451,19 @@ export async function runLoop(params: {
           const volOrder = volSched.maybeCreateTrade(symbol, mid.mid, volState);
           if (volOrder) {
             const safeOrder = { ...volOrder };
-            if (safeOrder.type === "market" && botRow.mmEnabled) {
+            if (activeVol) {
+              const bid = mid.bid ?? mid.mid;
+              const ask = mid.ask ?? mid.mid;
+              const notional = safeOrder.quoteQty ?? safeOrder.qty * mid.mid;
+              const price = safeOrder.side === "buy" ? bid : ask;
+              if (Number.isFinite(price) && price > 0 && Number.isFinite(notional)) {
+                safeOrder.type = "limit";
+                safeOrder.postOnly = true;
+                safeOrder.price = price;
+                safeOrder.qty = notional / price;
+                safeOrder.quoteQty = undefined;
+              }
+            } else if (safeOrder.type === "market" && botRow.mmEnabled) {
               const ref = Number.isFinite(mid.last) && (mid.last as number) > 0 ? (mid.last as number) : mid.mid;
               const halfMin = Math.max(0, mm.spreadPct / 2);
               const notional = (safeOrder.quoteQty ?? safeOrder.qty * mid.mid);
@@ -519,17 +531,23 @@ export async function runLoop(params: {
               log.info({ volOrder: safeOrder }, "volume trade submitted");
 
               if (activeVol && safeOrder.type === "limit" && safeOrder.price) {
-                const bid = mid.bid ?? mid.mid;
-                const ask = mid.ask ?? mid.mid;
-                const taker = {
-                  symbol,
-                  side: safeOrder.side === "buy" ? "sell" : "buy",
-                  type: "limit" as const,
-                  price: safeOrder.side === "buy" ? bid : ask,
-                  qty: safeOrder.qty,
-                  postOnly: false,
-                  clientOrderId: `vol${Date.now()}t`
-                };
+                const notional = safeOrder.price * safeOrder.qty;
+                const taker = safeOrder.side === "buy"
+                  ? {
+                      symbol,
+                      side: "sell" as const,
+                      type: "market" as const,
+                      qty: safeOrder.qty,
+                      clientOrderId: `vol${Date.now()}t`
+                    }
+                  : {
+                      symbol,
+                      side: "buy" as const,
+                      type: "market" as const,
+                      qty: safeOrder.qty,
+                      quoteQty: notional,
+                      clientOrderId: `vol${Date.now()}t`
+                    };
                 try {
                   const placedTaker = await exchange.placeOrder(taker);
                   if (placedTaker?.id && taker.clientOrderId) {
