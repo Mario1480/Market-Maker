@@ -19,6 +19,17 @@ export class BitmartRestClient {
 
   private readonly metaCache = new Map<string, { meta: SymbolMeta; ts: number }>();
 
+  private async parseJson(res: Response, label: string): Promise<any> {
+    const text = await res.text();
+    if (!text) return {};
+    try {
+      return JSON.parse(text);
+    } catch {
+      const snippet = text.slice(0, 200).replace(/\s+/g, " ");
+      throw new Error(`[bitmart] ${label} non-JSON response ${res.status} ${res.statusText}: ${snippet}`);
+    }
+  }
+
   private async getSymbolMeta(symbol: string): Promise<SymbolMeta | undefined> {
     const s = normalizeSymbol(symbol);
 
@@ -34,7 +45,7 @@ export class BitmartRestClient {
       try {
         const url = new URL(path, this.baseUrl);
         const res = await fetch(url, { method: "GET" });
-        const json: any = await res.json();
+        const json: any = await this.parseJson(res, "symbol meta");
 
         if (!res.ok || (json?.code && json.code !== 1000)) continue;
 
@@ -106,7 +117,7 @@ export class BitmartRestClient {
       body: method === "POST" ? body : undefined
     });
 
-    const json = await res.json().catch(() => ({}));
+    const json = await this.parseJson(res, `${method} ${path}`);
     if (!res.ok || (json?.code && json.code !== 1000)) {
       const msg = json?.message || json?.msg || res.statusText;
       throw new Error(`Bitmart API error ${res.status}: ${msg} (${JSON.stringify(json)})`);
@@ -132,7 +143,7 @@ export class BitmartRestClient {
     headers["X-BM-SIGN"] = this.signBody("{}", ts);
 
     const res = await fetch(url, { method: "GET", headers });
-    const json = await res.json().catch(() => ({}));
+    const json = await this.parseJson(res, `GET ${path}`);
     if (!res.ok || (json?.code && json.code !== 1000)) {
       const msg = json?.message || json?.msg || res.statusText;
       throw new Error(`Bitmart API error ${res.status}: ${msg} (${JSON.stringify(json)})`);
@@ -149,7 +160,7 @@ export class BitmartRestClient {
     url.searchParams.set("symbol", s);
 
     const res = await fetch(url, { method: "GET" });
-    const json: any = await res.json();
+    const json: any = await this.parseJson(res, "ticker");
     if (process.env.BITMART_DEBUG === "1") {
       const shape = Array.isArray(json?.data) ? "array" : typeof json?.data;
       console.log("[bitmart] ticker raw", JSON.stringify(json));
