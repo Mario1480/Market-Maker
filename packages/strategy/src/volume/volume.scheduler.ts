@@ -74,9 +74,9 @@ export class VolumeScheduler {
     }
 
     const targetNotional = isActiveMode
-      ? Math.min(remaining, Math.max(deficit, this.cfg.minTradeUsdt))
+      ? clamp(deficit, this.cfg.minTradeUsdt, this.cfg.maxTradeUsdt)
       : randBetween(this.cfg.minTradeUsdt, this.cfg.maxTradeUsdt);
-    const notional = Math.min(remaining, Math.max(this.cfg.minTradeUsdt, targetNotional));
+    const notional = Math.min(remaining, targetNotional);
     const side = Math.random() < 0.5 ? "buy" : "sell";
 
     const clientOrderId = `vol${now}`;
@@ -98,6 +98,7 @@ export class VolumeScheduler {
         side,
         type: "market",
         qty: notional / mid,
+        quoteQty: notional,
         clientOrderId
       };
     }
