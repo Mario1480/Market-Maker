@@ -519,11 +519,13 @@ export async function runLoop(params: {
               log.info({ volOrder: safeOrder }, "volume trade submitted");
 
               if (activeVol && safeOrder.type === "limit" && safeOrder.price) {
+                const bid = mid.bid ?? mid.mid;
+                const ask = mid.ask ?? mid.mid;
                 const taker = {
                   symbol,
                   side: safeOrder.side === "buy" ? "sell" : "buy",
                   type: "limit" as const,
-                  price: safeOrder.price,
+                  price: safeOrder.side === "buy" ? bid : ask,
                   qty: safeOrder.qty,
                   postOnly: false,
                   clientOrderId: `vol${Date.now()}t`
