@@ -288,7 +288,9 @@ export async function runLoop(params: {
       }
 
       // Volume order TTL cleanup (cancel stale vol-* orders)
-      const VOL_TTL_MS = vol.mode === "ACTIVE" ? volActiveTtlMs : 90_000; // shorter in ACTIVE
+      const VOL_TTL_MS = (vol.mode === "ACTIVE" || vol.mode === "MIXED")
+        ? volActiveTtlMs
+        : 90_000; // shorter in ACTIVE/MIXED
       const nowTs = Date.now();
 
       for (const o of openOther) {
@@ -443,19 +445,20 @@ export async function runLoop(params: {
       // Volume bot (PASSIVE-first: post-only limit near mid; MIXED may use rare market)
       if (botRow.volEnabled) {
         const activeVol = vol.mode === "ACTIVE";
+        const activeLikeVol = vol.mode === "ACTIVE" || vol.mode === "MIXED";
         if (maxOpen > 0 && projectedOpen >= maxOpen) {
           log.info(
             { openOrders: open.length, projectedOpen, maxOpen },
             "volume skipped: open order cap reached"
           );
-        } else if (activeVol && openVol.length > 0) {
+        } else if (activeLikeVol && openVol.length > 0) {
           log.info({ openVol: openVol.length }, "volume skipped: active order pending");
         } else {
           const volOrder = volSched.maybeCreateTrade(symbol, mid.mid, volState);
           if (volOrder) {
             let skipVolume = false;
             const safeOrder = { ...volOrder };
-            if (activeVol) {
+            if (activeLikeVol) {
               const bid = mid.bid ?? mid.mid;
               const ask = mid.ask ?? mid.mid;
               const ref = Number.isFinite(mid.last) && (mid.last as number) > 0 ? (mid.last as number) : mid.mid;
