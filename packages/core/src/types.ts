@@ -39,6 +39,7 @@ export interface Quote {
   type: OrderType;
   price?: number;
   qty: number;
+  quoteQty?: number;
   postOnly?: boolean;
   clientOrderId?: string;
 }
