@@ -483,6 +483,7 @@ export async function runLoop(params: {
               volState.lastSide = nextSide;
               volState.sideStreak = streak;
               safeOrder.side = nextSide;
+              log.info({ side: nextSide, streak }, "volume active side selection");
 
               const basePct = Math.max(0.0005, mm.spreadPct / 2);
               const pct = basePct * (0.2 + Math.random() * 0.4);
