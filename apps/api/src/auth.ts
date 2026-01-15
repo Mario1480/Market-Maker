@@ -13,12 +13,14 @@ function hashToken(token: string): string {
 }
 
 function cookieOptions(maxAgeMs: number) {
+  const domain = process.env.COOKIE_DOMAIN;
   return {
     httpOnly: true,
     sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     maxAge: maxAgeMs,
-    path: "/"
+    path: "/",
+    ...(domain ? { domain } : {})
   };
 }
 
@@ -53,8 +55,10 @@ export async function destroySession(res: Response, token?: string | null) {
       where: { tokenHash: hashToken(token) }
     });
   }
-  res.clearCookie(SESSION_COOKIE, { path: "/" });
-  res.clearCookie(REAUTH_COOKIE, { path: "/" });
+  const domain = process.env.COOKIE_DOMAIN;
+  const opts = domain ? { path: "/", domain } : { path: "/" };
+  res.clearCookie(SESSION_COOKIE, opts);
+  res.clearCookie(REAUTH_COOKIE, opts);
 }
 
 export async function createReauth(res: Response, userId: string) {
