@@ -112,6 +112,23 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return res.status(401).json({ error: "unauthorized" });
   }
 
+  const now = Date.now();
+  if (session.user.autoLogoutEnabled) {
+    const idleMs = session.user.autoLogoutMinutes * 60 * 1000;
+    const lastActiveAt = session.lastActiveAt?.getTime?.() ?? session.createdAt.getTime();
+    if (now - lastActiveAt > idleMs) {
+      await destroySession(res, token);
+      return res.status(401).json({ error: "session_expired" });
+    }
+  }
+
+  if (now - session.lastActiveAt.getTime() > 60_000) {
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { lastActiveAt: new Date(now) }
+    });
+  }
+
   const workspace = await ensureWorkspaceForUser(session.userId);
   res.locals.user = session.user;
   res.locals.workspaceId = workspace.id;
