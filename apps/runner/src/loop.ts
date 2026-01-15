@@ -448,6 +448,22 @@ export async function runLoop(params: {
           const volOrder = volSched.maybeCreateTrade(symbol, mid.mid, volState);
           if (volOrder) {
             const safeOrder = { ...volOrder };
+            if (safeOrder.type === "market" && botRow.mmEnabled) {
+              const ref = Number.isFinite(mid.last) && (mid.last as number) > 0 ? (mid.last as number) : mid.mid;
+              const halfMin = Math.max(0, mm.spreadPct / 2);
+              const notional = (safeOrder.quoteQty ?? safeOrder.qty * mid.mid);
+              const pct = halfMin > 0 ? halfMin * (0.15 + Math.random() * 0.7) : 0;
+              const price = safeOrder.side === "buy"
+                ? ref * (1 - pct)
+                : ref * (1 + pct);
+              if (Number.isFinite(price) && price > 0 && Number.isFinite(notional)) {
+                safeOrder.type = "limit";
+                safeOrder.postOnly = true;
+                safeOrder.price = price;
+                safeOrder.qty = notional / price;
+                safeOrder.quoteQty = undefined;
+              }
+            }
             if (safeOrder.type === "market") {
               if (safeOrder.side === "buy") {
                 const quoteQty = Math.min(
