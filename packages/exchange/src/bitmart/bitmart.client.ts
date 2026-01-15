@@ -203,7 +203,7 @@ export class BitmartRestClient {
     if (!Number.isFinite(mid) || mid <= 0) {
       throw new Error(`Ticker missing prices for ${s}`);
     }
-    return { bid, ask, mid, ts: nowMs() };
+    return { bid, ask, mid, last, ts: nowMs() };
   }
 
   // ---------- Private ----------
