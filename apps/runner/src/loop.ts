@@ -56,6 +56,8 @@ export async function runLoop(params: {
   const volMmSafetyMult = Number(process.env.VOL_MM_SAFETY_MULT || "1.5");
   const volLastBandPct = Number(process.env.VOL_LAST_BAND_PCT || "0.0001");
   const volInsideSpreadPct = Number(process.env.VOL_INSIDE_SPREAD_PCT || "0.00005");
+  const volLastMinBumpAbs = Number(process.env.VOL_LAST_MIN_BUMP_ABS || "0.00000001");
+  const volLastMinBumpPct = Number(process.env.VOL_LAST_MIN_BUMP_PCT || "0");
   const orderMgr = new OrderManager({ priceEpsPct, qtyEpsPct });
   let lastRepriceAt = 0;
   let lastRepriceMid = 0;
@@ -626,9 +628,15 @@ export async function runLoop(params: {
               }
 
               if (Number.isFinite(price) && price > 0 && Number.isFinite(notional)) {
-                if ((nextSide === "buy" && price >= ref) || (nextSide === "sell" && price <= ref)) {
-                  log.info({ ref, price, side: nextSide }, "volume skipped: no room inside spread");
-                  skipVolume = true;
+                const bump = Math.max(volLastMinBumpAbs, ref * volLastMinBumpPct);
+                if (nextSide === "buy") {
+                  if (price <= ref + bump) price = ref + bump;
+                  if (mid.ask && price >= mid.ask * (1 - Math.max(0.00005, volInsideSpreadPct))) {
+                    log.info({ ref, price, side: nextSide }, "volume skipped: no room inside spread");
+                    skipVolume = true;
+                  }
+                } else {
+                  if (price <= ref + bump) price = ref + bump;
                 }
               }
 
