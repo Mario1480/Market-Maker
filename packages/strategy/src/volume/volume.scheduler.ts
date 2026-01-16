@@ -8,6 +8,8 @@ export interface VolumeState {
   pendingClientOrderId?: string;
   lastSide?: "buy" | "sell";
   sideStreak?: number;
+  buyCount?: number;
+  sellCount?: number;
   dailyAlertSent?: boolean;
 }
 
@@ -29,6 +31,8 @@ export class VolumeScheduler {
       state.dayKey = dayKey;
       state.tradedNotional = 0;
       state.dailyAlertSent = false;
+      state.buyCount = 0;
+      state.sellCount = 0;
     }
   }
 
