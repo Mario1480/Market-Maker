@@ -52,8 +52,8 @@ export async function runLoop(params: {
   const volCooldownMs = Number(process.env.MM_VOL_COOLDOWN_MS || "15000");
   const volActiveTtlMs = Number(process.env.VOL_ACTIVE_TTL_MS || "8000");
   const volMmSafetyMult = Number(process.env.VOL_MM_SAFETY_MULT || "1.5");
-  const volLastBandPct = Number(process.env.VOL_LAST_BAND_PCT || "0.0004");
-  const volInsideSpreadPct = Number(process.env.VOL_INSIDE_SPREAD_PCT || "0.00015");
+  const volLastBandPct = Number(process.env.VOL_LAST_BAND_PCT || "0.0001");
+  const volInsideSpreadPct = Number(process.env.VOL_INSIDE_SPREAD_PCT || "0.00005");
   const orderMgr = new OrderManager({ priceEpsPct, qtyEpsPct });
   let lastRepriceAt = 0;
   let lastRepriceMid = 0;
