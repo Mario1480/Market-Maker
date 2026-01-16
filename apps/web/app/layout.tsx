@@ -14,8 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="appFooterCopy">© 2026 uLiquid Market-Maker</div>
             <div className="appFooterLinks">
               <a href="https://uliquid.vip" aria-label="Link 1">uliquid.vip</a>
-              <a href="#" aria-label="Link 2">Link 2</a>
-              <a href="#" aria-label="Link 3">Link 3</a>
+              <a href="mailto:support@uliquid.vip" aria-label="Support email">support@uliquid.vip</a>
             </div>
           </div>
         </footer>
