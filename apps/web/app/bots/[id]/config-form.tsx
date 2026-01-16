@@ -152,6 +152,12 @@ export function ConfigForm({
           value={vol.maxTradeUsdt}
           onChange={(v) => onVolChange({ ...vol, maxTradeUsdt: toNumber(v, vol.maxTradeUsdt) })}
         />
+        <Field
+          label="Buy Ratio (%)"
+          hint="Target share of buy trades (e.g. 75 = 75% buys)"
+          value={toPercent(vol.buyPct ?? 0.5)}
+          onChange={(v) => onVolChange({ ...vol, buyPct: fromPercent(v, vol.buyPct ?? 0.5) })}
+        />
         <SelectField
           label="Mode"
           hint="Passive = post-only near mid. Mixed = mostly passive with occasional market orders. Active = pace to daily target with market orders."

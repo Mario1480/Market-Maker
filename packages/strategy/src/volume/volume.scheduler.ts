@@ -83,7 +83,8 @@ export class VolumeScheduler {
       ? clamp(deficit, this.cfg.minTradeUsdt, this.cfg.maxTradeUsdt)
       : randBetween(this.cfg.minTradeUsdt, this.cfg.maxTradeUsdt);
     const notional = Math.min(remaining, targetNotional);
-    const side = Math.random() < 0.5 ? "buy" : "sell";
+    const buyPct = Number.isFinite(this.cfg.buyPct) ? this.cfg.buyPct : 0.5;
+    const side = Math.random() < buyPct ? "buy" : "sell";
 
     const clientOrderId = `vol${now}`;
 

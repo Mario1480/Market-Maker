@@ -34,7 +34,8 @@ export async function loadBotAndConfigs(botId: string) {
     maxTradeUsdt: bot.volConfig.maxTradeUsdt,
     activeFrom: "00:00",
     activeTo: "23:59",
-    mode: bot.volConfig.mode as any
+    mode: bot.volConfig.mode as any,
+    buyPct: bot.volConfig.buyPct ?? 0.5
   };
 
   const risk: RiskConfig = {
@@ -95,7 +96,8 @@ export async function loadLatestBotAndConfigs() {
     maxTradeUsdt: bot.volConfig.maxTradeUsdt,
     activeFrom: "00:00",
     activeTo: "23:59",
-    mode: bot.volConfig.mode as any
+    mode: bot.volConfig.mode as any,
+    buyPct: bot.volConfig.buyPct ?? 0.5
   };
 
   const risk: RiskConfig = {

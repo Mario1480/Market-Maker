@@ -66,7 +66,8 @@ const VolConfig = z.object({
   maxTradeUsdt: z.number(),
   activeFrom: z.string(),
   activeTo: z.string(),
-  mode: z.enum(["PASSIVE", "MIXED", "ACTIVE"])
+  mode: z.enum(["PASSIVE", "MIXED", "ACTIVE"]),
+  buyPct: z.number().min(0).max(1)
 });
 
 const RiskConfig = z.object({
@@ -623,7 +624,8 @@ app.post("/bots", requireAuth, async (req, res) => {
           maxTradeUsdt: 40,
           activeFrom: "00:00",
           activeTo: "23:59",
-          mode: "MIXED"
+          mode: "MIXED",
+          buyPct: 0.5
         }
       },
       riskConfig: {

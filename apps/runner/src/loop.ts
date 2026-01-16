@@ -595,13 +595,18 @@ export async function runLoop(params: {
               if (canBuyUsdt && canSellBase) {
                 const winBuy = volSideWindow.filter((s) => s === "buy").length;
                 const winSell = volSideWindow.length - winBuy;
-                if (Math.abs(winBuy - winSell) >= 2) {
-                  nextSide = winBuy > winSell ? "sell" : "buy";
-                } else if (buyCount === sellCount && lastSide) {
-                  nextSide = lastSide === "buy" ? "sell" : "buy";
+                const buyTarget = Number.isFinite(vol.buyPct) ? Math.max(0, Math.min(1, vol.buyPct)) : 0.5;
+                const targetBuy = Math.round(volSideWindowMax * buyTarget);
+                const targetSell = volSideWindowMax - targetBuy;
+
+                if (volSideWindow.length >= volSideWindowMax) {
+                  if (winBuy > targetBuy + 2) nextSide = "sell";
+                  else if (winSell > targetSell + 2) nextSide = "buy";
+                  else nextSide = winBuy <= targetBuy ? "buy" : "sell";
                 } else {
-                  nextSide = buyCount <= sellCount ? "buy" : "sell";
+                  nextSide = buyCount / Math.max(1, buyCount + sellCount) < buyTarget ? "buy" : "sell";
                 }
+
                 streak = nextSide === lastSide ? streak + 1 : 1;
               } else if (lastSide && nextSide === lastSide) {
                 if (streak >= 5) {
