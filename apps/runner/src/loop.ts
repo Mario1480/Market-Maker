@@ -63,6 +63,8 @@ export async function runLoop(params: {
   let lastVolTradeAt = 0;
   let fundsAlertSent = false;
   let fundsWarnSent = false;
+  const volSideWindow: ("buy" | "sell")[] = [];
+  const volSideWindowMax = 20;
 
   const volState = { dayKey: "init", tradedNotional: 0, lastActionMs: 0, dailyAlertSent: false } as VolState;
   const { base } = splitSymbol(symbol);
@@ -585,9 +587,20 @@ export async function runLoop(params: {
 
               const lastSide = volState.lastSide;
               let streak = volState.sideStreak ?? 0;
-              if (canBuyUsdt && canSellBase && lastSide) {
-                nextSide = lastSide === "buy" ? "sell" : "buy";
-                streak = 1;
+              const buyCount = volState.buyCount ?? 0;
+              const sellCount = volState.sellCount ?? 0;
+
+              if (canBuyUsdt && canSellBase) {
+                const winBuy = volSideWindow.filter((s) => s === "buy").length;
+                const winSell = volSideWindow.length - winBuy;
+                if (Math.abs(winBuy - winSell) >= 2) {
+                  nextSide = winBuy > winSell ? "sell" : "buy";
+                } else if (buyCount === sellCount && lastSide) {
+                  nextSide = lastSide === "buy" ? "sell" : "buy";
+                } else {
+                  nextSide = buyCount <= sellCount ? "buy" : "sell";
+                }
+                streak = nextSide === lastSide ? streak + 1 : 1;
               } else if (lastSide && nextSide === lastSide) {
                 if (streak >= 5) {
                   nextSide = lastSide === "buy" ? "sell" : "buy";
@@ -685,6 +698,15 @@ export async function runLoop(params: {
                   clientOrderId: safeOrder.clientOrderId
                 });
               }
+              if (activeLikeVol) {
+                if (safeOrder.side === "buy") {
+                  volState.buyCount = (volState.buyCount ?? 0) + 1;
+                } else {
+                  volState.sellCount = (volState.sellCount ?? 0) + 1;
+                }
+                volSideWindow.push(safeOrder.side);
+                if (volSideWindow.length > volSideWindowMax) volSideWindow.shift();
+              }
               lastVolTradeAt = Date.now();
               log.info({ volOrder: safeOrder }, "volume trade submitted");
 
@@ -732,6 +754,15 @@ export async function runLoop(params: {
                         orderId: placedTaker.id,
                         clientOrderId: taker.clientOrderId
                       });
+                    }
+                    if (activeLikeVol) {
+                      if (taker.side === "buy") {
+                        volState.buyCount = (volState.buyCount ?? 0) + 1;
+                      } else {
+                        volState.sellCount = (volState.sellCount ?? 0) + 1;
+                      }
+                      volSideWindow.push(taker.side);
+                      if (volSideWindow.length > volSideWindowMax) volSideWindow.shift();
                     }
                     log.info({ volOrder: taker }, "volume trade submitted (taker)");
                   } catch (e) {
