@@ -65,6 +65,7 @@ export async function runLoop(params: {
   let lastVolTradeAt = 0;
   let fundsAlertSent = false;
   let fundsWarnSent = false;
+  let lowFundsSince: number | null = null;
   const volSideWindow: ("buy" | "sell")[] = [];
   const volSideWindowMax = 20;
 
@@ -376,39 +377,6 @@ export async function runLoop(params: {
         freeUsdt >= vol.minTradeUsdt ||
         freeBase * mid.mid >= vol.minTradeUsdt
       );
-      const warnPct = Math.max(0, notificationConfig.fundsWarnPct ?? 0);
-      const warnMult = 1 + warnPct;
-      const mmWarn = notificationConfig.fundsWarnEnabled && botRow.mmEnabled && (
-        freeUsdt < mm.budgetQuoteUsdt * warnMult ||
-        freeBase < mm.budgetBaseToken * warnMult
-      );
-      const volWarn = notificationConfig.fundsWarnEnabled && botRow.volEnabled && (
-        freeUsdt < vol.minTradeUsdt * warnMult &&
-        freeBase * mid.mid < vol.minTradeUsdt * warnMult
-      );
-
-      if ((mmWarn || volWarn) && !fundsWarnSent && mmFundsOk && volFundsOk) {
-        const warns: string[] = [];
-        if (mmWarn) {
-          warns.push(`MM reserve low (freeUsdt=${freeUsdt}, freeBase=${freeBase})`);
-        }
-        if (volWarn) {
-          warns.push(`Volume reserve low (freeUsdt=${freeUsdt}, freeBase=${freeBase})`);
-        }
-        const warnMsg = `Funds nearing threshold: ${warns.join("; ")}`;
-        fundsWarnSent = true;
-        await writeAlert({
-          botId,
-          level: "warn",
-          title: "Funds low (10% reserve)",
-          message: `symbol=${symbol} ${warnMsg}`
-        });
-        await alert(
-          "warn",
-          `[FUNDS] ${botName} (${symbol})`,
-          warnMsg
-        );
-      }
 
       if (!mmFundsOk || !volFundsOk) {
         const reasons: string[] = [];
@@ -421,17 +389,34 @@ export async function runLoop(params: {
         const reason = `Insufficient funds: ${reasons.join("; ")}`;
         log.warn({ freeUsdt, freeBase, reason }, "insufficient funds");
 
-        try {
-          await exchange.cancelAll(symbol);
-        } catch {}
+        if (!lowFundsSince) lowFundsSince = t0;
+        if (t0 - lowFundsSince >= 60_000 && !fundsAlertSent) {
+          const shouldDisable = botRow.mmEnabled || botRow.volEnabled;
+          if (shouldDisable) {
+            try {
+              await exchange.cancelAll(symbol);
+            } catch {}
+            await updateBotFlags({ botId, mmEnabled: false, volEnabled: false });
+          }
 
-        await updateBotFlags({ botId, status: "PAUSED" });
-        sm.set("PAUSED", reason);
+          fundsAlertSent = true;
+          await writeAlert({
+            botId,
+            level: "warn",
+            title: "Insufficient funds (bots stopped)",
+            message: `symbol=${symbol} ${reason}`
+          });
+          await alert(
+            "warn",
+            `[FUNDS] ${botName} (${symbol})`,
+            `${reason}\nAction: MM/Volume stopped after 60s`
+          );
+        }
 
         await writeRuntime({
           botId,
-          status: "PAUSED",
-          reason,
+          status: "RUNNING",
+          reason: fundsAlertSent ? `Funds low: MM/Volume stopped` : "Funds low: waiting 60s",
           mid: mid.mid,
           bid: mid.bid ?? null,
           ask: mid.ask ?? null,
@@ -444,25 +429,14 @@ export async function runLoop(params: {
           tradedNotionalToday: volState.tradedNotional
         });
 
-        if (!fundsAlertSent) {
-          fundsAlertSent = true;
-          await writeAlert({
-            botId,
-            level: "warn",
-            title: "Insufficient funds",
-            message: `symbol=${symbol} ${reason}`
-          });
-          await alert(
-            "warn",
-            `[FUNDS] ${botName} (${symbol})`,
-            reason
-          );
-        }
-
         const elapsed = Date.now() - t0;
         const sleep = Math.max(0, tickMs - elapsed);
         await new Promise((r) => setTimeout(r, sleep));
         continue;
+      } else {
+        lowFundsSince = null;
+        fundsAlertSent = false;
+        fundsWarnSent = false;
       }
 
       if (!decision.ok) {
