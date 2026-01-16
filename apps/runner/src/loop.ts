@@ -59,6 +59,7 @@ export async function runLoop(params: {
   let lastRepriceMid = 0;
   let smoothedInvRatio: number | null = null;
   let lastVolTradeAt = 0;
+  let fundsAlertSent = false;
 
   const volState = { dayKey: "init", tradedNotional: 0, lastActionMs: 0, dailyAlertSent: false } as VolState;
   const { base } = splitSymbol(symbol);
@@ -102,6 +103,7 @@ export async function runLoop(params: {
         const b = (await loadBotAndConfigs(botId)).bot;
         if (b.status === "RUNNING") {
           sm.set("RUNNING", "");
+          fundsAlertSent = false;
           await writeRuntime({
             botId,
             status: "RUNNING",
@@ -146,6 +148,7 @@ export async function runLoop(params: {
         const b = (await loadBotAndConfigs(botId)).bot;
         if (b.status === "RUNNING") {
           sm.set("RUNNING", "");
+          fundsAlertSent = false;
           await writeRuntime({
             botId,
             status: "RUNNING",
@@ -353,6 +356,70 @@ export async function runLoop(params: {
       if (debug) {
         const sample = balances.slice(0, 8).map((b) => ({ asset: b.asset, free: b.free, locked: b.locked }));
         log.info({ freeUsdt, freeBase, base, sample }, "balances snapshot");
+      }
+
+      const mmFundsOk = !botRow.mmEnabled || (
+        freeUsdt >= mm.budgetQuoteUsdt &&
+        freeBase >= mm.budgetBaseToken
+      );
+      const volFundsOk = !botRow.volEnabled || (
+        freeUsdt >= vol.minTradeUsdt ||
+        freeBase * mid.mid >= vol.minTradeUsdt
+      );
+
+      if (!mmFundsOk || !volFundsOk) {
+        const reasons: string[] = [];
+        if (!mmFundsOk && botRow.mmEnabled) {
+          reasons.push(`MM funds low (freeUsdt=${freeUsdt}, freeBase=${freeBase})`);
+        }
+        if (!volFundsOk && botRow.volEnabled) {
+          reasons.push(`Volume funds low (freeUsdt=${freeUsdt}, freeBase=${freeBase})`);
+        }
+        const reason = `Insufficient funds: ${reasons.join("; ")}`;
+        log.warn({ freeUsdt, freeBase, reason }, "insufficient funds");
+
+        try {
+          await exchange.cancelAll(symbol);
+        } catch {}
+
+        await updateBotFlags({ botId, status: "PAUSED" });
+        sm.set("PAUSED", reason);
+
+        await writeRuntime({
+          botId,
+          status: "PAUSED",
+          reason,
+          mid: mid.mid,
+          bid: mid.bid ?? null,
+          ask: mid.ask ?? null,
+          openOrders: open.length,
+          openOrdersMm: openMm.length,
+          openOrdersVol: openVol.length,
+          lastVolClientOrderId,
+          freeUsdt,
+          freeBase,
+          tradedNotionalToday: volState.tradedNotional
+        });
+
+        if (!fundsAlertSent) {
+          fundsAlertSent = true;
+          await writeAlert({
+            botId,
+            level: "warn",
+            title: "Insufficient funds",
+            message: `symbol=${symbol} ${reason}`
+          });
+          await alert(
+            "warn",
+            `[FUNDS] ${botName} (${symbol})`,
+            reason
+          );
+        }
+
+        const elapsed = Date.now() - t0;
+        const sleep = Math.max(0, tickMs - elapsed);
+        await new Promise((r) => setTimeout(r, sleep));
+        continue;
       }
 
       if (!decision.ok) {
