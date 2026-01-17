@@ -602,7 +602,7 @@ export async function runLoop(params: {
               );
 
               const bandPct = Math.max(0.0001, volLastBandPct) * (0.5 + Math.random() * 0.5);
-              let price = makerSide === "buy" ? ref * (1 - bandPct) : ref * (1 + bandPct);
+              let price = makerSide === "buy" ? ref * (1 + bandPct) : ref * (1 + bandPct);
               if (Number.isFinite(bid) && Number.isFinite(ask) && ask > bid) {
                 const inside = Math.max(0.00005, volInsideSpreadPct) * volMmSafetyMult;
                 const floor = bid * (1 + inside);
@@ -616,7 +616,7 @@ export async function runLoop(params: {
                 const bump = Math.max(volLastMinBumpAbs, ref * volLastMinBumpPct);
                 if (makerSide === "buy") {
                   if (price <= ref + bump) price = ref + bump;
-                  if (mid.ask && price >= mid.ask * (1 - Math.max(0.00005, volInsideSpreadPct))) {
+                  if (mid.ask && price > mid.ask * (1 - Math.max(0.00005, volInsideSpreadPct))) {
                     log.info({ ref, price, side: makerSide }, "volume skipped: no room inside spread");
                     skipVolume = true;
                   }
