@@ -414,6 +414,9 @@ export default function BotOverviewPage() {
           )}
         </section>
 
+      </div>
+
+      <div className="overviewGrid" style={{ marginTop: 16 }}>
         <section className="card" style={{ padding: 12 }}>
           <h3 style={{ marginTop: 0 }}>Manual Trades</h3>
           {!me?.allowManualTrading ? (
