@@ -605,7 +605,7 @@ export async function runLoop(params: {
 
               // Price anchor for maker side relative to last (tune here)
               const bumpBase = Math.max(volLastMinBumpAbs, ref * volLastMinBumpPct);
-              const buyBump = bumpBase * Math.max(1, volBuyTicks);
+              const buyBump = bumpBase * Math.max(0, volBuyTicks);
               // Sell maker = last, Buy maker = last + buyBump (tune here)
               let price = makerSide === "buy" ? ref + buyBump : ref;
               if (Number.isFinite(bid) && Number.isFinite(ask) && ask > bid) {
