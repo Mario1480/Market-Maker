@@ -393,7 +393,11 @@ app.get("/workspaces/:id/members", requireAuth, requireWorkspaceAccess(), requir
 app.post("/workspaces/:id/members/invite", requireAuth, requireWorkspaceAccess(), requirePermission("users.manage_members"), async (req, res) => {
   const workspaceId = req.params.id;
   const actor = getUserFromLocals(res);
-  const payload = z.object({ email: z.string().email(), roleId: z.string() }).parse(req.body);
+  const payload = z.object({
+    email: z.string().email(),
+    roleId: z.string(),
+    resetPassword: z.boolean().optional()
+  }).parse(req.body);
 
   const role = await prisma.role.findFirst({ where: { id: payload.roleId, workspaceId } });
   if (!role) return res.status(400).json({ error: "invalid_role" });
@@ -405,6 +409,13 @@ app.post("/workspaces/:id/members/invite", requireAuth, requireWorkspaceAccess()
     const tempHash = await hashPassword(tempPassword);
     user = await prisma.user.create({
       data: { email: payload.email, passwordHash: tempHash }
+    });
+  } else if (payload.resetPassword) {
+    tempPassword = crypto.randomBytes(8).toString("hex");
+    const tempHash = await hashPassword(tempPassword);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: tempHash }
     });
   }
 
