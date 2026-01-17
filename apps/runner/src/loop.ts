@@ -544,6 +544,7 @@ export async function runLoop(params: {
           if (volOrder) {
             let skipVolume = false;
             const safeOrder = { ...volOrder };
+            const allowTaker = activeVol || (vol.mode === "MIXED" && Math.random() < 0.2);
             if (activeLikeVol) {
               const bid = mid.bid ?? mid.mid;
               const ask = mid.ask ?? mid.mid;
@@ -590,13 +591,18 @@ export async function runLoop(params: {
               } else {
                 streak = 1;
               }
-              volState.lastSide = nextSide;
+              const desiredAggressiveSide = nextSide;
+              const makerSide = allowTaker ? (desiredAggressiveSide === "buy" ? "sell" : "buy") : desiredAggressiveSide;
+              volState.lastSide = desiredAggressiveSide;
               volState.sideStreak = streak;
-              safeOrder.side = nextSide;
-              log.info({ side: nextSide, streak }, "volume active side selection");
+              safeOrder.side = makerSide;
+              log.info(
+                { desiredAggressiveSide, makerSide, streak, buyPct: vol.buyPct },
+                "volume active side selection"
+              );
 
               const bandPct = Math.max(0.0001, volLastBandPct) * (0.5 + Math.random() * 0.5);
-              let price = nextSide === "buy" ? ref * (1 - bandPct) : ref * (1 + bandPct);
+              let price = makerSide === "buy" ? ref * (1 - bandPct) : ref * (1 + bandPct);
               if (Number.isFinite(bid) && Number.isFinite(ask) && ask > bid) {
                 const inside = Math.max(0.00005, volInsideSpreadPct) * volMmSafetyMult;
                 const floor = bid * (1 + inside);
@@ -608,10 +614,10 @@ export async function runLoop(params: {
 
               if (Number.isFinite(price) && price > 0 && Number.isFinite(notional)) {
                 const bump = Math.max(volLastMinBumpAbs, ref * volLastMinBumpPct);
-                if (nextSide === "buy") {
+                if (makerSide === "buy") {
                   if (price <= ref + bump) price = ref + bump;
                   if (mid.ask && price >= mid.ask * (1 - Math.max(0.00005, volInsideSpreadPct))) {
-                    log.info({ ref, price, side: nextSide }, "volume skipped: no room inside spread");
+                    log.info({ ref, price, side: makerSide }, "volume skipped: no room inside spread");
                     skipVolume = true;
                   }
                 } else {
@@ -692,7 +698,7 @@ export async function runLoop(params: {
                   clientOrderId: safeOrder.clientOrderId
                 });
               }
-              if (activeLikeVol) {
+              if (activeLikeVol && !allowTaker) {
                 if (safeOrder.side === "buy") {
                   volState.buyCount = (volState.buyCount ?? 0) + 1;
                 } else {
@@ -704,24 +710,24 @@ export async function runLoop(params: {
               lastVolTradeAt = Date.now();
               log.info({ volOrder: safeOrder }, "volume trade submitted");
 
-              const allowTaker = activeVol || (vol.mode === "MIXED" && Math.random() < 0.2);
               if (allowTaker && safeOrder.type === "limit" && safeOrder.price) {
                 let skipTaker = false;
                 const notional = safeOrder.price * safeOrder.qty;
-                const taker = safeOrder.side === "buy"
+                const desiredAggressiveSide = volState.lastSide ?? (safeOrder.side === "buy" ? "sell" : "buy");
+                const taker = desiredAggressiveSide === "buy"
                   ? {
-                      symbol,
-                      side: "sell" as const,
-                      type: "market" as const,
-                      qty: Math.min(safeOrder.qty, freeBase),
-                      clientOrderId: `vol${Date.now()}t`
-                    }
-                  : {
                       symbol,
                       side: "buy" as const,
                       type: "market" as const,
                       qty: safeOrder.qty,
                       quoteQty: Math.min(notional, freeUsdt),
+                      clientOrderId: `vol${Date.now()}t`
+                    }
+                  : {
+                      symbol,
+                      side: "sell" as const,
+                      type: "market" as const,
+                      qty: Math.min(safeOrder.qty, freeBase),
                       clientOrderId: `vol${Date.now()}t`
                     };
                 if (taker.side === "sell") {
