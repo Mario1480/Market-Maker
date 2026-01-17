@@ -23,6 +23,7 @@ import {
 } from "./auth.js";
 import { seedAdmin } from "./seed-admin.js";
 import { ensureDefaultRoles } from "./rbac.js";
+import { sendInviteEmail } from "./email.js";
 
 const app = express();
 
@@ -397,9 +398,11 @@ app.post("/workspaces/:id/members/invite", requireAuth, requireWorkspaceAccess()
   const role = await prisma.role.findFirst({ where: { id: payload.roleId, workspaceId } });
   if (!role) return res.status(400).json({ error: "invalid_role" });
 
+  let tempPassword: string | null = null;
   let user = await prisma.user.findUnique({ where: { email: payload.email } });
   if (!user) {
-    const tempHash = await hashPassword(crypto.randomBytes(16).toString("hex"));
+    tempPassword = crypto.randomBytes(8).toString("hex");
+    const tempHash = await hashPassword(tempPassword);
     user = await prisma.user.create({
       data: { email: payload.email, passwordHash: tempHash }
     });
@@ -428,7 +431,17 @@ app.post("/workspaces/:id/members/invite", requireAuth, requireWorkspaceAccess()
     meta: { email: payload.email, roleId: payload.roleId }
   });
 
-  res.json({ ok: true, memberId: member.id });
+  const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
+  const baseUrl = process.env.INVITE_BASE_URL || "https://test.uliquid.vip";
+  const emailResult = await sendInviteEmail({
+    to: payload.email,
+    workspaceName: workspace?.name ?? "Workspace",
+    invitedByEmail: actor.email,
+    tempPassword,
+    baseUrl
+  });
+
+  res.json({ ok: true, memberId: member.id, emailSent: emailResult.ok, emailError: emailResult.error ?? null });
 });
 
 app.put("/workspaces/:id/members/:memberId", requireAuth, requireWorkspaceAccess(), requirePermission("users.manage_members"), async (req, res) => {
