@@ -10,6 +10,7 @@ export default function UsersPage() {
   const [roles, setRoles] = useState<any[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRoleId, setInviteRoleId] = useState("");
+  const [inviteResetPassword, setInviteResetPassword] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [savingMemberId, setSavingMemberId] = useState<string | null>(null);
@@ -53,9 +54,11 @@ export default function UsersPage() {
     try {
       await apiPost(`/workspaces/${me.workspaceId}/members/invite`, {
         email: inviteEmail,
-        roleId: inviteRoleId
+        roleId: inviteRoleId,
+        resetPassword: inviteResetPassword
       });
       setInviteEmail("");
+      setInviteResetPassword(false);
       setStatus("invited");
       await loadMembers();
       setTimeout(() => setStatus(""), 1200);
@@ -186,6 +189,14 @@ export default function UsersPage() {
                 </option>
               ))}
             </select>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={inviteResetPassword}
+                onChange={(e) => setInviteResetPassword(e.target.checked)}
+              />
+              Reset password and include a temporary password in the email
+            </label>
             <button className="btn btnPrimary" onClick={invite} disabled={!inviteEmail || !inviteRoleId}>
               Invite
             </button>
