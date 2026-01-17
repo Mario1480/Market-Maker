@@ -58,6 +58,7 @@ export async function runLoop(params: {
   const volInsideSpreadPct = Number(process.env.VOL_INSIDE_SPREAD_PCT || "0.00005");
   const volLastMinBumpAbs = Number(process.env.VOL_LAST_MIN_BUMP_ABS || "0.00000001");
   const volLastMinBumpPct = Number(process.env.VOL_LAST_MIN_BUMP_PCT || "0");
+  const volBuyTicks = Number(process.env.VOL_BUY_TICKS || "2");
   const orderMgr = new OrderManager({ priceEpsPct, qtyEpsPct });
   let lastRepriceAt = 0;
   let lastRepriceMid = 0;
@@ -601,8 +602,11 @@ export async function runLoop(params: {
                 "volume active side selection"
               );
 
-              const bandPct = Math.max(0.0001, volLastBandPct) * (0.5 + Math.random() * 0.5);
-              let price = makerSide === "buy" ? ref * (1 + bandPct) : ref * (1 + bandPct);
+              // Price anchor for maker side relative to last (tune here)
+              const bumpBase = Math.max(volLastMinBumpAbs, ref * volLastMinBumpPct);
+              const buyBump = bumpBase * Math.max(1, volBuyTicks);
+              // Sell maker = last, Buy maker = last + buyBump (tune here)
+              let price = makerSide === "buy" ? ref + buyBump : ref;
               if (Number.isFinite(bid) && Number.isFinite(ask) && ask > bid) {
                 const inside = Math.max(0.00005, volInsideSpreadPct) * volMmSafetyMult;
                 const floor = bid * (1 + inside);
@@ -613,15 +617,14 @@ export async function runLoop(params: {
               }
 
               if (Number.isFinite(price) && price > 0 && Number.isFinite(notional)) {
-                const bump = Math.max(volLastMinBumpAbs, ref * volLastMinBumpPct);
                 if (makerSide === "buy") {
-                  if (price <= ref + bump) price = ref + bump;
+                  if (price <= ref + buyBump) price = ref + buyBump;
                   if (mid.ask && price > mid.ask * (1 - Math.max(0.00005, volInsideSpreadPct))) {
                     log.info({ ref, price, side: makerSide }, "volume skipped: no room inside spread");
                     skipVolume = true;
                   }
                 } else {
-                  if (price <= ref + bump) price = ref + bump;
+                  if (price < ref) price = ref;
                 }
               }
 
