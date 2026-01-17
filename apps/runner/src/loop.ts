@@ -717,36 +717,51 @@ export async function runLoop(params: {
                 let skipTaker = false;
                 const notional = safeOrder.price * safeOrder.qty;
                 const desiredAggressiveSide = volState.lastSide ?? (safeOrder.side === "buy" ? "sell" : "buy");
+                const ref = Number.isFinite(mid.last) && (mid.last as number) > 0 ? (mid.last as number) : mid.mid;
+                const bumpBase = Math.max(volLastMinBumpAbs, ref * volLastMinBumpPct);
+                const buyBump = bumpBase * Math.max(5, volBuyTicks);
+                const insidePct = Math.max(0.00005, volInsideSpreadPct);
+                const takerPrice = desiredAggressiveSide === "buy"
+                  ? (mid.ask ? Math.max(ref + buyBump, mid.ask * (1 + insidePct)) : ref + buyBump)
+                  : (mid.bid ? Math.min(ref - bumpBase, mid.bid * (1 - insidePct)) : Math.max(ref - bumpBase, 0));
+
+                if (!Number.isFinite(takerPrice) || takerPrice <= 0) {
+                  skipTaker = true;
+                }
+
                 const taker = desiredAggressiveSide === "buy"
                   ? {
                       symbol,
                       side: "buy" as const,
-                      type: "market" as const,
-                      qty: safeOrder.qty,
-                      quoteQty: Math.min(notional, freeUsdt),
+                      type: "limit" as const,
+                      price: takerPrice,
+                      qty: 0,
                       clientOrderId: `vol${Date.now()}t`
                     }
                   : {
                       symbol,
                       side: "sell" as const,
-                      type: "market" as const,
+                      type: "limit" as const,
+                      price: takerPrice,
                       qty: Math.min(safeOrder.qty, freeBase),
                       clientOrderId: `vol${Date.now()}t`
                     };
+
                 if (taker.side === "sell") {
-                  const sellNotional = taker.qty * safeOrder.price;
+                  const sellNotional = taker.qty * takerPrice;
                   if (!Number.isFinite(taker.qty) || taker.qty <= 0 || sellNotional < vol.minTradeUsdt) {
                     log.info({ sellNotional }, "volume skipped: insufficient base for taker");
                     skipTaker = true;
                   }
                 } else {
-                  const buyNotional = taker.quoteQty ?? 0;
+                  const buyNotional = Math.min(notional, freeUsdt);
                   if (!Number.isFinite(buyNotional) || buyNotional < vol.minTradeUsdt) {
                     log.info({ buyNotional }, "volume skipped: insufficient USDT for taker");
                     skipTaker = true;
                   }
-                  taker.qty = buyNotional / mid.mid;
+                  taker.qty = buyNotional / takerPrice;
                 }
+
                 if (!skipTaker) {
                   try {
                     const placedTaker = await exchange.placeOrder(taker);
